@@ -33,7 +33,7 @@ export declare namespace DataRaw {
         /** Story-Punkte (in float) */
         customfield_10002: number | null
         /** Sprint */
-        customfield_10005: string[] | null
+        customfield_10005: SprintString[] | null
         comment: Paged & {
             comments: Comment[]
         }
@@ -135,6 +135,7 @@ export declare namespace DataRaw {
         id: string;
         /** The comment text. */
         body: string;
+        author: User;
         /** The date and time at which the comment was created. */
         created: string;
         /** The date and time at which the comment was updated last. */

@@ -5,7 +5,7 @@
 data-raw
 data-test
 data
-data-raw.zip
+*.zip
 
 # Project
 ###########################

@@ -1,10 +1,9 @@
 {
     "extends": [
-        "@tsconfig/node24/tsconfig.json",
-        "@tsconfig/strictest"
+        "@tsconfig/node24/tsconfig.json"
     ],
     "include": [
-        "scrapper/**/*"
+        "scripts/**/*"
     ],
     "compilerOptions": {
         "types": ["node"],

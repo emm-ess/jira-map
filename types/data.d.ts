@@ -3,7 +3,7 @@ import type {DataRaw} from './data-raw'
 declare namespace Data {
     // User
     //------------------
-    export type User = Pick<DataRaw.User, 'key' | 'avatarUrls' | 'displayName'>
+    export type User = Pick<DataRaw.User, 'key' | 'avatarUrls' | 'displayName' | 'name'>
 
     export type UserFile = {
         /** key is field `key` of user */
@@ -13,15 +13,15 @@ declare namespace Data {
     // Sprint
     //------------------
     export type Sprint = {
-        id: number
+        id: string
         sequence: number
         name: string
-        goal: string
+        goal?: string
         state: string
-        startDate: string
-        endDate: string
-        activatedDate: string
-        completeDate: string
+        startDate?: string
+        endDate?: string
+        activatedDate?: string
+        completeDate?: string
     }
 
     export type SprintFile = {
@@ -54,7 +54,8 @@ declare namespace Data {
         id: string;
         inwardIssue?: LinkedIssue;
         outwardIssue?: LinkedIssue;
-        type: IssueLinkType;
+        /** The ID of the IssueLinkType. */
+        type: string;
     }
 
     export type IssueLinkFile = {
@@ -85,8 +86,19 @@ declare namespace Data {
 
     // Issue
     //------------------
-    export type Comment = Omit<DataRaw.Comment, 'self'>
-    export type IssueChangelog = DataRaw.IssueChangelogHistoryItem[]
+    export type Comment = Omit<DataRaw.Comment, 'self' | 'author' | 'updateAuthor'> & {
+        /** The key of the user */
+        author: string
+        /** The key of the user */
+        updateAuthor?: string
+        /** The key of the users. If user couldn't be found it will be the name of the user. */
+        mentionedUsers: string[]
+    }
+
+    export type IssueChangelogHistory = Omit<DataRaw.IssueChangelogHistory, 'author'> & {
+        /** The key of the user */
+        author: string
+    }
 
     export type Issue = {
         /** The ID of the issue. */
@@ -103,19 +115,24 @@ declare namespace Data {
         subtasks: string[]
         created: string;
         description: string | null;
-        /** Id of the user */
+        /** The key of the user */
         reporter: string;
         /** Story-Punkte (in float) */
         storypoints?: number
         /** Sprint */
-        sprint?: string
+        sprints?: string[]
         comments: Comment[]
-        issuelinks: IssueLink[];
-        /** Id of the user */
+        issuelinks: string[];
+        /** The key of the user */
         assignee: string;
         updated: string
         /** Id of the status */
         status: string;
-        changelog: IssueChangelog;
+        changelog: IssueChangelogHistory[];
+
+        /** The keys of the users. If user couldn't be found it will be the name of the user. */
+        mentionedUsers: string[]
+        /** The keys of the users */
+        assignedUsers: string[]
     }
 }

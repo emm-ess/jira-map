@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "lint": "npm-run-all -p lint:*",
     "lint:scripts": "eslint . --fix",
-    "lint:package-json": "sort-package-json package.json"
+    "lint:package-json": "sort-package-json package.json",
+    "type-check": "tsc --noEmit",
+
+      "prepareData": "node scripts/prepareData.ts",
+      "detectConnections": "node scripts/detectConnections.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "~21.2.1",
@@ -18,13 +22,14 @@
     "@emm-ess-configs/eslint-config": "^0.4.0",
     "@tsconfig/node24": "^24.0.4",
     "@tsconfig/strictest": "^2.0.8",
+      "@types/node": "^24.1.0",
     "eslint": "^9.39.5",
     "husky": "~9.1.7",
     "lint-staged": "~17.2.0",
-    "npm-run-all2": "~9.0.2",
+    "npm-run-all2": "~9.0.3",
     "sort-package-json": "^4.0.0",
     "typescript": "~6.0.3",
-    "vite": "^8.1.5"
+    "vite": "^8.2.0"
   },
   "commitlint": {
     "extends": "@commitlint/config-conventional"
