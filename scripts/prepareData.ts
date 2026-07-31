@@ -1,319 +1,215 @@
+import type {ElementDefinition} from 'cytoscape'
 import fs from 'node:fs'
-import type {DataRaw} from '../types/data-raw.ts'
 import type {Data} from '../types/data.ts'
-import {
-    getJsonFilesOfDirectory,
-    dataDir,
-    readJsonFile,
-    writeArray,
-    writeMap,
-    readMap,
-    additionalDataDir,
-} from './util.ts'
+import {AVAILABLE_EDGES, AVAILABLE_NODE_TYPES, EDGE_TYPE, NODE_TYPE} from './const.ts'
+import type {CommentMentions} from './evaluateData.ts'
+import {dataDir, readJsonFile, readMap, simplifiedDataDir, writeArray} from './util.ts'
 
-// scrapping the data via this script was planned but the instance doesn't allow it. So it's manually downloaded
-// files and a script for data reduction/extraction
+const users = readMap<Data.User>('users.json', dataDir)
+const issueTypes = readMap<Data.IssueType>('types.json', dataDir)
+const sprints = readMap<Data.Sprint>('sprints.json', dataDir)
+const issues = readJsonFile<Data.Issue[]>('issues.json', dataDir)
 
-const MENTION_REGEX = /\[~([^\]]+)]/g
-const SPRINT_REGEX = /^com\.atlassian\.greenhopper\.service\.sprint\.Sprint@.+?\[activatedDate=(.*?),autoStartStop=(?:true|false),completeDate=(.*?),endDate=(.*?),goal=(.*?),id=(\d+),incompleteIssuesDestinationId=<null>,name=(.*?),rapidViewId=\d+,sequence=(\d+),startDate=(.*?),state=(.*?),synced=(?:true|false)\]$/
+/* ****************+
+ * NODES
+ *******************/
+export type UserData = {
+    type: 'user'
+    id: string
+    displayName: string
+}
 
-const user = new Map<string, Data.User>()
-const sprints = new Map<string, Data.Sprint>()
-const components = new Map<string, Data.Component>()
-const issueLinkTypes = new Map<string, Data.IssueLinkType>()
-const links = new Map<string, Data.IssueLink>()
-const statuses = new Map<string, Data.Status>()
-const issueType = new Map<string, Data.IssueType>()
-const issues: Data.Issue[] = []
+function prepareUsers(): void {
+    const usersForCytoscape = users.values().map<ElementDefinition>(user => ({
+        group: 'nodes',
+        data: {
+            type: NODE_TYPE.USER,
+            id: user.key,
+            displayName: user.displayName,
+        } as const satisfies UserData,
+    })).toArray()
+    writeArray(usersForCytoscape, AVAILABLE_NODE_TYPES.USER.filename, simplifiedDataDir)
+}
 
-const userMeta = readMap<UserMetaData>('userMeta.json', additionalDataDir)
-const userReplacements = new Map<string, string>(
-    userMeta.values()
-        .filter((entry) => entry.combine && entry.combine.length > 1)
-        .flatMap((entry) => {
-            const mainKey = entry.combine![0]
-            return entry.combine!.slice(1).map((key) => [key, mainKey])
-        })
-)
-
-function processSprintString(sprintStrings: DataRaw.SprintString[] | null): string[] | undefined {
-    if (!sprintStrings?.length) {
-        return
-    }
-
-    return sprintStrings.map((rawSprint) => {
-        const match = rawSprint.match(SPRINT_REGEX)
-
-        if (match === null || match.length !== 10) {
-            throw new Error(`Invalid sprint string: ${rawSprint}`)
-        }
-
-        const id = match[5] as string
-
-        const sprint = {
-            id,
-            activatedDate: match[1] as string,
-            completeDate: match[2] as string,
-            endDate: match[3] as string,
-            goal: match[4] as string,
-            name: match[6] as string,
-            sequence: Number(match[7]),
-            startDate: match[8] as string,
-            state: match[9] as string,
-        }
-
-        for (const key in sprint) {
-            if (sprint[key] === '<null>') {
-                delete sprint[key]
+function prepareComponents(): void {
+    const preparedComponents = readMap<Data.Component>('components.json', dataDir).values()
+        .map<ElementDefinition>((component) => ({
+            group: 'nodes',
+            data: {
+                type: NODE_TYPE.COMPONENT,
+                ...component,
             }
+        })).toArray()
+    writeArray(preparedComponents, AVAILABLE_NODE_TYPES.COMPONENT.filename, simplifiedDataDir)
+}
+
+function prepareSprints(): void {
+    const simplifiedSprints = sprints.values().map<ElementDefinition>((sprint) => ({
+        group: 'nodes',
+        data: {
+            type: NODE_TYPE.SPRINT,
+            id: sprint.id,
+            name: sprint.name,
+            goal: sprint.goal,
         }
-
-        sprints.set(id, sprint)
-
-        return id
-    })
+    })).toArray()
+    writeArray(simplifiedSprints, AVAILABLE_NODE_TYPES.SPRINT.filename, simplifiedDataDir)
 }
 
-function processUser<T extends DataRaw.User | undefined | null>(rawUser: T): T extends DataRaw.User ? string : undefined {
-    if (!rawUser) {
-        return
-    }
-
-    const key = rawUser.key
-    user.set(key, {
-        key,
-        name: rawUser.name,
-        avatarUrls: rawUser.avatarUrls,
-        displayName: rawUser.displayName,
-    })
-
-    // return key for main user
-    return userReplacements.has(key)
-        ? userReplacements.get(key)
-        : key
-}
-
-function processComponent(rawComponent: DataRaw.ProjectComponent): string {
-    components.set(rawComponent.id, {
-        id: rawComponent.id,
-        name: rawComponent.name,
-    })
-
-    return rawComponent.id
-}
-
-function processIssueType(rawIssueType: DataRaw.IssueType): string {
-    issueType.set(rawIssueType.id, {
-        id: rawIssueType.id,
-        name: rawIssueType.name,
-        subtask: rawIssueType.subtask,
-    })
-
-    return rawIssueType.id
-}
-
-function processStatus(rawStatus: DataRaw.Status): string {
-    const id = rawStatus.id
-    statuses.set(id, {
-        id,
-        description: rawStatus.description,
-        name: rawStatus.name,
-        statusCategory: {
-            colorName: rawStatus.statusCategory.colorName,
-            id: rawStatus.statusCategory.id,
-            key: rawStatus.statusCategory.key,
-            name: rawStatus.statusCategory.name,
-        },
-    })
-
-    return id
-}
-
-function processLinkedIssue(rawLinkedIssue: DataRaw.LinkedIssue): Data.LinkedIssue {
-    processStatus(rawLinkedIssue.fields.status)
-
-    return {
-        id: rawLinkedIssue.id,
-        issuetype: processIssueType(rawLinkedIssue.fields.issuetype),
-    }
-}
-
-function processIssueLinkType(rawIssueLinkType: DataRaw.IssueLinkType): string {
-    const id = rawIssueLinkType.id
-    issueLinkTypes.set(id, {
-        id,
-        name: rawIssueLinkType.name,
-        inward: rawIssueLinkType.inward,
-        outward: rawIssueLinkType.outward,
-    })
-
-    return id
-}
-
-function processIssueLink(rawIssueLink: DataRaw.IssueLink): string {
-    const id = rawIssueLink.id
-
-    const issueLink: Data.IssueLink = links.get(id) ?? {
-        id,
-        type: processIssueLinkType(rawIssueLink.type),
-    }
-
-    if (rawIssueLink.inwardIssue) {
-        issueLink.inwardIssue = processLinkedIssue(rawIssueLink.inwardIssue)
-    }
-
-    if (rawIssueLink.outwardIssue) {
-        issueLink.outwardIssue = processLinkedIssue(rawIssueLink.outwardIssue)
-    }
-
-    links.set(issueLink.id, issueLink)
-
-    return issueLink.id
-}
-
-function processComment(rawComment: DataRaw.Comment): Data.Comment {
-    const mentionedUsers = [...rawComment.body.matchAll(MENTION_REGEX)]
-        .map((match) => match[0].slice(2, -1))
-    return {
-        id: rawComment.id,
-        body: rawComment.body,
-        author: processUser(rawComment.author),
-        created: rawComment.created,
-        updated: rawComment.updated,
-        updateAuthor: processUser(rawComment.updateAuthor),
-        mentionedUsers,
-    } as Data.Comment
-}
-
-function processChangelog(rawChangelog: DataRaw.IssueChangelog): Data.IssueChangelogHistory[] {
-    return rawChangelog.histories.map((history) => ({
-        id: history.id,
-        author: processUser(history.author),
-        created: history.created,
-        items: history.items,
+function prepareIssues(): void {
+    const simplifiedIssues = issues.map<ElementDefinition>((issue) => ({
+        group: 'nodes',
+        data: {
+            type: NODE_TYPE.ISSUE,
+            id: issue.id,
+            key: issue.key,
+            issueType: issueTypes.get(issue.issuetype)?.name,
+            summary: issue.summary,
+            status: issue.status,
+        }
     }))
+    writeArray(simplifiedIssues, AVAILABLE_NODE_TYPES.ISSUE.filename, simplifiedDataDir)
 }
 
-function processAssignedUsers(changelog: Data.IssueChangelogHistory[], currentAssignee?: string): string[] {
-    const assignedUsers = changelog.flatMap((history) =>
-        history.items
-            .filter((item) => item.field === 'assignee')
-            .flatMap((item) => [item.from, item.to]),
-    ).filter((user, index, array) => {
-        return !(!user || (index !== 0 && user !== array[index - 1]))
-    })
+/* ****************+
+ * EDGES
+ *******************/
+function prepareMentions(): void {
+    const mentions = readJsonFile<Record<string, CommentMentions>>('commentMentions.json', dataDir)
 
-    if (currentAssignee) {
-        assignedUsers.unshift(currentAssignee)
-    }
+    const mentionPerUser: ElementDefinition[] = []
+    let maxCountPerUser = 0
+    const mentionPerUserPerTicket: ElementDefinition[] = []
+    let maxCountPerUserPerTicket = 0
+    const mentionPerUserPerComment: ElementDefinition[] = []
 
-    return assignedUsers
-}
+    Object.entries(mentions).forEach(([user, issuesPings]) => {
+        const mentionsPerUserCount: Record<string, number> = {}
+        Object.entries(issuesPings).forEach(([issue, comments]) => {
+            const mentionPerUserPerTicketCount: Record<string, number> = {}
+            comments.forEach(comment => {
+                comment.mentionedUsers
+                    .filter(mentionedUser => users.has(mentionedUser))
+                    .forEach(mentionedUser => {
+                        mentionPerUserPerComment.push({
+                            group: 'edges',
+                            data: {
+                                type: EDGE_TYPE.MENTION_PER_COMMENT,
+                                id: `${user}-${issue}-${comment.comment}-${mentionedUser}`,
+                                source: user,
+                                target: mentionedUser,
+                                count: 1,
+                                weight: 1,
+                            }
+                        })
+                        mentionPerUserPerTicketCount[mentionedUser] = (mentionPerUserPerTicketCount[mentionedUser] ?? 0) + 1
+                        mentionsPerUserCount[mentionedUser] = (mentionsPerUserCount[mentionedUser] ?? 0) + 1
+                })
+            })
 
-function processIssue(issue: DataRaw.Issue): Data.Issue {
-    const assignee = processUser(issue.fields.assignee)
-    const changelog = processChangelog(issue.changelog)
-    const comments = issue.fields.comment.comments.map(processComment)
+            Object.entries(mentionPerUserPerTicketCount).forEach(([mentionedUser, count]) => {
+                mentionPerUserPerTicket.push({
+                    group: 'edges',
+                    data: {
+                        type: EDGE_TYPE.MENTION_PER_TICKET,
+                        id: `${user}-${issue}-${mentionedUser}`,
+                        source: user,
+                        target: mentionedUser,
+                        count,
+                    }
+                })
+                maxCountPerUserPerTicket = Math.max(maxCountPerUserPerTicket, count)
+            })
+        })
 
-    const processedIssue: Data.Issue = {
-        id: issue.id,
-        key: issue.key,
-        assignee,
-        assignedUsers: processAssignedUsers(changelog, assignee),
-        mentionedUsers: comments.flatMap((comment) => comment.mentionedUsers),
-        sprints: processSprintString(issue.fields.customfield_10005),
-        summary: issue.fields.summary,
-        issuetype: processIssueType(issue.fields.issuetype),
-        lastViewed: issue.fields.lastViewed,
-        components: issue.fields.components.map(processComponent),
-        subtasks: issue.fields.subtasks.map((subtask) => {
-            processLinkedIssue(subtask)
-            return subtask.id
-        }),
-        created: issue.fields.created,
-        description: issue.fields.description,
-        reporter: processUser(issue.fields.reporter),
-        issuelinks: issue.fields.issuelinks.map(processIssueLink),
-        updated: issue.fields.updated,
-        status: processStatus(issue.fields.status),
-        comments,
-        changelog,
-    }
-
-    if (issue.fields.customfield_10002 !== null) {
-        processedIssue.storypoints = Math.round(issue.fields.customfield_10002)
-    }
-
-    issues.push(processedIssue)
-
-    return processedIssue
-}
-
-function fixMentionedUsers() {
-    const traversedUsers = new Map(user.values().map((user) => [
-        user.name,
-        userReplacements.get(user.key) || user.key,
-    ]))
-    function traverseUser(users: string[]): string[] {
-        return users.map((user) => traversedUsers.get(user) || user)
-    }
-
-    issues.forEach((issue) => {
-        issue.mentionedUsers = traverseUser(issue.mentionedUsers)
-        issue.comments.forEach((comment) => {
-            comment.mentionedUsers = traverseUser(comment.mentionedUsers)
+        Object.entries(mentionsPerUserCount).forEach(([mentionedUser, count]) => {
+            mentionPerUser.push({
+                group: 'edges',
+                data: {
+                    type: EDGE_TYPE.MENTION_PER_USER,
+                    id: `${user}-${mentionedUser}`,
+                    source: user,
+                    target: mentionedUser,
+                    count,
+                }
+            })
+            maxCountPerUser = Math.max(maxCountPerUser, count)
         })
     })
-}
 
-type UserMetaData = {
-    hide?: boolean
-    combine?: string[]
-    displayName?: string
-}
-
-function fixUser() {
-    user.values().forEach((userEntry) => {
-        const meta = userMeta.get(userEntry.key)
-        if (meta?.hide || userReplacements.has(userEntry.key)) {
-            user.delete(userEntry.key)
-            return
-        }
-
-        if (meta?.displayName) {
-            userEntry.displayName = meta.displayName
-        }
-
-        if (userEntry.displayName.endsWith(' [X]')) {
-            userEntry.displayName = userEntry.displayName.slice(0, -4)
-        }
+    // normalize
+    mentionPerUser.forEach((item) => {
+        item.data.weight = item.data.count / maxCountPerUser
     })
+    mentionPerUserPerTicket.forEach((item) => {
+        item.data.weight = item.data.count / maxCountPerUserPerTicket
+    })
+
+    mentionPerUser.sort((a, b) => b.data.count - a.data.count)
+    mentionPerUserPerTicket.sort((a, b) => b.data.count - a.data.count)
+    mentionPerUserPerComment.sort((a, b) => b.data.count - a.data.count)
+
+    writeArray(mentionPerUser, AVAILABLE_EDGES.MENTION_PER_USER.filename, simplifiedDataDir)
+    writeArray(mentionPerUserPerTicket, AVAILABLE_EDGES.MENTION_PER_TICKET.filename, simplifiedDataDir)
+    writeArray(mentionPerUserPerComment, AVAILABLE_EDGES.MENTION_PER_COMMENT.filename, simplifiedDataDir)
 }
 
-async function main() {
-    const files = getJsonFilesOfDirectory()
-
-    for (const dirent of files) {
-        process.stdout.write(`\r${dirent.name}`)
-        const content = readJsonFile<DataRaw.File>(dirent.name)
-        content.issues.forEach((issue) => {
-            process.stdout.write(`\r${issue.key}`)
-            processIssue(issue)
-        })
-        fixMentionedUsers()
-        fixUser()
-        process.stdout.write(`\r${dirent.name} done`)
-    }
-
-    fs.mkdirSync(dataDir, { recursive: true })
-    writeMap(user, 'users')
-    writeMap(sprints, 'sprints')
-    writeMap(components, 'components')
-    writeMap(issueLinkTypes, 'issueLinkTypes')
-    writeMap(links, 'links')
-    writeMap(statuses, 'statuses')
-    writeMap(issueType, 'types')
-    writeArray(issues, 'issues')
+function prepareEdgesSprintIssue(): void {
+    // @ts-expect-error we do filter for undefined
+    const sprintIssueEdges: ElementDefinition[] = issues.flatMap((issue) => issue.sprints?.map((sprint) => ({
+        group: 'edges',
+        data: {
+            type: EDGE_TYPE.SPRINT_ISSUE,
+            id: `${sprint}-${issue.key}`,
+            source: sprint,
+            target: issue.key,
+        }
+    }))).filter(Boolean)
+    writeArray(sprintIssueEdges, AVAILABLE_EDGES.SPRINT_ISSUE.filename, simplifiedDataDir)
 }
 
-main()
+function prepareEdgesUserIssue(): void {
+    const userIssue = issues.flatMap<ElementDefinition>((issue) =>
+        issue.assignedUsers?.filter((user, index, array) => index !== array.indexOf(user))
+            .map((user) => ({
+                group: 'edges',
+                data: {
+                    type: EDGE_TYPE.USER_ISSUE,
+                    id: `${issue.id}-${user}`,
+                }
+        }))).filter(Boolean)
+    writeArray(userIssue, AVAILABLE_EDGES.USER_ISSUE.filename, simplifiedDataDir)
+}
+
+function prepareIssueLinks(): void {
+    const issueLinkTypes = readMap<Data.IssueLinkType>('issueLinkTypes.json', dataDir)
+    const issueLinks = readMap<Data.IssueLink>('links.json', dataDir).values()
+        .filter((link) => link.inwardIssue && link.inwardIssue)
+        .map((link) => ({
+            group: 'edges',
+            data: {
+                type: EDGE_TYPE.ISSUE_LINK,
+                id: link.id,
+                source: link.inwardIssue!.id,
+                target: link.outwardIssue!.id,
+                linkType: issueLinkTypes.get(link.type)?.name,
+            }
+        })).toArray()
+    writeArray(issueLinks, AVAILABLE_EDGES.ISSUE_LINK.filename, simplifiedDataDir)
+}
+
+function prepareData(): void {
+    fs.mkdirSync(simplifiedDataDir, { recursive: true })
+    // Nodes
+    prepareUsers()
+    prepareComponents()
+    prepareSprints()
+    prepareIssues()
+
+    // Edges
+    prepareMentions()
+    prepareEdgesSprintIssue()
+    prepareEdgesUserIssue()
+    prepareIssueLinks()
+}
+prepareData()

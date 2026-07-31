@@ -13,10 +13,10 @@
     "lint:package-json": "sort-package-json package.json",
     "type-check": "tsc --noEmit",
 
-      "data": "npm-run-all -s data:prepare data:discover data:simplify",
-      "data:prepare": "node scripts/prepareData.ts",
-      "data:discover": "node scripts/detectConnections.ts",
-      "data:simplify": "node scripts/simplify.ts"
+      "data": "npm-run-all -s data:normalize data:evaluate data:prepare",
+      "data:normalize": "node scripts/normalizeData.ts",
+      "data:evaluate": "node scripts/evaluateData.ts",
+      "data:prepare": "node scripts/prepareData.ts"
   },
     "dependencies": {
         "cytoscape": "^3.34.0",

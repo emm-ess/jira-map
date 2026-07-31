@@ -1,13 +1,13 @@
 import type {Data} from '../types/data.ts'
-import {readArray, readMap, writeMap} from './util.ts'
+import {readArray, writeMap} from './util.ts'
 
-const user = readMap<Data.User>('users.json')
-const sprints = readMap<Data.Sprint>('sprints.json')
-const components = readMap<Data.Component>('components.json')
-const issueLinkTypes = readMap<Data.IssueLinkType>('issueLinkTypes.json')
-const links = readMap<Data.IssueLink>('links.json')
-const statuses = readMap<Data.Status>('statuses.json')
-const issueType = readMap<Data.IssueType>('types.json')
+// const user = readMap<Data.User>('users.json')
+// const sprints = readMap<Data.Sprint>('sprints.json')
+// const components = readMap<Data.Component>('components.json')
+// const issueLinkTypes = readMap<Data.IssueLinkType>('issueLinkTypes.json')
+// const links = readMap<Data.IssueLink>('links.json')
+// const statuses = readMap<Data.Status>('statuses.json')
+// const issueType = readMap<Data.IssueType>('types.json')
 const issues  = readArray<Data.Issue>('issues.json')
 
 export type CommentMentions = {
@@ -44,8 +44,8 @@ function detectCommentPings(): void {
     writeMap(pings, 'commentMentions')
 }
 
-function detectConnections(): void {
+function evaluateData(): void {
     detectCommentPings()
 }
 
-detectConnections()
+evaluateData()

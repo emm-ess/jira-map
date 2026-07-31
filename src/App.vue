@@ -1,80 +1,141 @@
 <template>
-    <div id="cy" ref="cyEle" />
+    <main>
+        <div id="cy" ref="cyEle" />
 
-    <base-select
-        id="layout"
-        v-model="layout"
-        :items="LAYOUTS"
-    >
-        Layout
-    </base-select>
-    <base-select
-        id="mentions"
-        v-model="commentMentions"
-        :items="AVAILABLE_MENTIONS"
-    >
-        Mentions
-    </base-select>
+        <form>
+            <base-select
+                id="layout"
+                v-model="layout"
+                :items="LAYOUTS"
+            >
+                Layout
+            </base-select>
+
+            <fieldset>
+                <legend>Nodes</legend>
+                <base-checkbox
+                    v-for="nodeType in Object.values(AVAILABLE_NODE_TYPES)"
+                    :id="nodeType.type"
+                    :key="nodeType.type"
+                    v-model="selectedNodes"
+                    :value="nodeType"
+                >
+                    {{ nodeType.name }}
+                </base-checkbox>
+            </fieldset>
+            <fieldset>
+                <legend>Edges</legend>
+                <base-checkbox
+                    v-for="edgeType in Object.values(AVAILABLE_EDGES)"
+                    :id="edgeType.type"
+                    :key="edgeType.type"
+                    v-model="selectedEdges"
+                    :value="edgeType"
+                    :disabled="!isEdgePossible(edgeType)"
+                >
+                    {{ edgeType.name }}
+                </base-checkbox>
+            </fieldset>
+        </form>
+    </main>
 </template>
 
 <script lang="ts" setup>
 import cytoscape from 'cytoscape'
-import {onMounted, ref, useTemplateRef, watch} from 'vue'
+import {nextTick, onMounted, ref, useTemplateRef, watch} from 'vue'
 
+import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
+import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
 
-import {AVAILABLE_MENTIONS, loadData, usersForCytoscape} from './data.ts'
+import {
+    AVAILABLE_EDGES,
+    AVAILABLE_NODE_TYPES,
+    type EdgeSelection,
+    type EdgeType,
+    type NodeSelection,
+} from '../scripts/const.ts'
+import {loadData} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
 
 const layout = ref(LAYOUTS[0])
-const commentMentions = ref(AVAILABLE_MENTIONS[0])
+const selectedNodes = ref<NodeSelection[]>([AVAILABLE_NODE_TYPES.USER])
+const selectedEdges = ref<EdgeSelection[]>([AVAILABLE_EDGES.MENTION_PER_USER])
 
 let cy: cytoscape.Core
 
-onMounted(() => {
+onMounted(async () => {
     cy = cytoscape({
         container: cyEle.value,
-        style: [{
-            selector: 'node',
-            style: {
-                label: 'data(displayName)',
-            },
-        }, {
-            selector: 'edge',
-            style: {
-                width: 'mapData(weight, 0, 1, 1, 10)',
-                'line-color': '#888',
-
-                'target-arrow-shape': 'triangle',
-                'target-arrow-color': '#888',
-
-                'curve-style': 'bezier',
-            },
-        }],
+        style: cytoscopeStyle,
     })
-    cy.add(usersForCytoscape)
+    await updateNodes()
+    await updateEdges()
     cy.layout(layout.value.layout).run()
 })
 
 watch(layout, (newLayout) => {
-    cy.layout({
-        ...newLayout.layout,
-    }).run()
+    cy.clearQueue()
+    cy.layout(newLayout.layout).run()
 })
 
-watch(commentMentions, async (newCommentMentions) => {
-    const data = await loadData(newCommentMentions.file)
+function isEdgePossible(edge: EdgeSelection): boolean {
+    return edge.nodes.every((nodeType) => selectedNodes.value.some((selected) => selected.type === nodeType))
+}
+
+function cleanEdges(edgeTypeToKeep: Set<EdgeType>): void {
     cy.remove(
-        cy.elements().filter((element) => element.group() === 'edges'),
+        cy.edges().filter((element) => !edgeTypeToKeep.has(element.data().type)),
     )
-    cy.add(data)
-}, {immediate: true})
+}
+
+watch(selectedNodes, updateNodes, {deep: true})
+watch(selectedEdges, updateEdges, {immediate: true, deep: true})
+
+async function updateNodes() {
+    const edgesToKeep = new Set(selectedEdges.value
+        .filter(isEdgePossible)
+        .map((edge) => edge.type))
+    cleanEdges(edgesToKeep)
+
+    // eslint-disable-next-line compat/compat
+    const data = await Promise.all(selectedNodes.value.map((nodeType) => loadData(nodeType.filename)))
+    const nodesToKeep = new Set(selectedNodes.value.map((nodeType) => nodeType.type))
+    cy.remove(
+        cy.nodes().filter((element) => !nodesToKeep.has(element.data().type)),
+    )
+    cy.add(data.flat())
+}
+
+async function updateEdges() {
+    // eslint-disable-next-line compat/compat
+    const data = await Promise.all(selectedEdges.value.map((edgeType) => loadData(edgeType.filename)))
+    const edgesToKeep = new Set(selectedEdges.value.map((edgeType) => edgeType.type))
+    cleanEdges(edgesToKeep)
+    cy.add(data.flat())
+}
 </script>
 
 <style lang="sass" scoped>
-#cy
+main
+    display: flex
     width: 100vw
     height: 100vh
+
+#cy
+    flex: 1 1 auto
+
+form
+    display: flex
+    flex-direction: column
+    gap: 16px
+    padding: 16px
+    width: 12.25%
+
+fieldset
+    display: flex
+    flex-direction: column
+    gap: 8px
 </style>
