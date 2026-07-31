@@ -10,7 +10,7 @@ const statuses = readMap<Data.Status>('statuses.json')
 const issueType = readMap<Data.IssueType>('types.json')
 const issues  = readArray<Data.Issue>('issues.json')
 
-type CommentPing = {
+export type CommentMentions = {
     [issueKey: string]: Array<{
         /** id of comment */
         comment: string
@@ -19,7 +19,7 @@ type CommentPing = {
 }
 
 function detectCommentPings(): void {
-    const pings = new Map<string, CommentPing>()
+    const pings = new Map<string, CommentMentions>()
 
     for (const issue of issues) {
         for (const comment of issue.comments) {
@@ -41,7 +41,7 @@ function detectCommentPings(): void {
         }
     }
 
-    writeMap(pings, 'comment-pings')
+    writeMap(pings, 'commentMentions')
 }
 
 function detectConnections(): void {

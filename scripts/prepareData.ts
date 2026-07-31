@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import type {DataRaw} from '../types/data-raw.ts'
 import type {Data} from '../types/data.ts'
-import {getJsonFilesOfDirectory, outputDir, readJsonFile, writeArray, writeMap} from './util.ts'
+import {getJsonFilesOfDirectory, dataDir, readJsonFile, writeArray, writeMap} from './util.ts'
 
 // scrapping the data via this script was planned but the instance doesn't allow it. So it's manually downloaded
 // files and a script for data reduction/extraction
@@ -264,7 +264,7 @@ async function main() {
         process.stdout.write(`\r${dirent.name} done`)
     }
 
-    fs.mkdirSync(outputDir, { recursive: true })
+    fs.mkdirSync(dataDir, { recursive: true })
     writeMap(user, 'users')
     writeMap(sprints, 'sprints')
     writeMap(components, 'components')

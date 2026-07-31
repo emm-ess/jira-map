@@ -1,23 +1,37 @@
 <template>
-    <div id="cy" ref="cyEle"/>
+    <div id="cy" ref="cyEle" />
 
-    <base-select id="layout" :items="LAYOUTS" v-model="layout" />
+    <base-select
+        id="layout"
+        v-model="layout"
+        :items="LAYOUTS"
+    >
+        Layout
+    </base-select>
+    <base-select
+        id="mentions"
+        v-model="commentMentions"
+        :items="AVAILABLE_MENTIONS"
+    >
+        Mentions
+    </base-select>
 </template>
 
 <script lang="ts" setup>
-import BaseSelect from '@/components/BaseSelect.vue'
-import {useTemplateRef, onMounted, ref, watch} from 'vue'
 import cytoscape from 'cytoscape'
+import {onMounted, ref, useTemplateRef, watch} from 'vue'
 
+import BaseSelect from '@/components/BaseSelect.vue'
+
+import {AVAILABLE_MENTIONS, loadData, usersForCytoscape} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
-import {commentPings, usersForCytoscape} from './data.ts'
 
 const cyEle = useTemplateRef('cyEle')
 
 const layout = ref(LAYOUTS[0])
+const commentMentions = ref(AVAILABLE_MENTIONS[0])
 
 let cy: cytoscape.Core
-
 
 onMounted(() => {
     cy = cytoscape({
@@ -25,23 +39,22 @@ onMounted(() => {
         style: [{
             selector: 'node',
             style: {
-                label: 'data(displayName)'
-            }
+                label: 'data(displayName)',
+            },
         }, {
             selector: 'edge',
             style: {
-                width: 1,
+                width: 'mapData(weight, 0, 1, 1, 10)',
                 'line-color': '#888',
 
                 'target-arrow-shape': 'triangle',
                 'target-arrow-color': '#888',
 
-                'curve-style': 'bezier'
-            }
-        }]
+                'curve-style': 'bezier',
+            },
+        }],
     })
     cy.add(usersForCytoscape)
-    cy.add(commentPings)
     cy.layout(layout.value.layout).run()
 })
 
@@ -50,6 +63,14 @@ watch(layout, (newLayout) => {
         ...newLayout.layout,
     }).run()
 })
+
+watch(commentMentions, async (newCommentMentions) => {
+    const data = await loadData(newCommentMentions.file)
+    cy.remove(
+        cy.elements().filter((element) => element.group() === 'edges'),
+    )
+    cy.add(data)
+}, {immediate: true})
 </script>
 
 <style lang="sass" scoped>

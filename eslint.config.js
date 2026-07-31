@@ -17,7 +17,7 @@ export default [
         },
     },
     {
-        name: 'config-stuff',
+        name: 'node-stuff',
         files: ['*.ts'],
         ignores: ['src/**/*.*'],
         languageOptions: {
@@ -36,19 +36,6 @@ export default [
             'sonarjs/different-types-comparison': 0,
             '@stylistic/block-spacing': 0,
             'unicorn/explicit-length-check': 0,
-        },
-    },
-    {
-        // i got errors with the files when these imports were present:
-        // @vitejs/plugin-vue
-        // vite-plugin-vue-devtools
-        // vite
-        files: [
-            'vite.config.ts',
-            'vitest.config.ts',
-        ],
-        rules: {
-            'import-x/no-cycle': 0,
         },
     },
     {

@@ -2,8 +2,7 @@
 ###########################
 .todo
 .notes
-data-raw
-data-test
+data-*
 data
 *.zip
 
