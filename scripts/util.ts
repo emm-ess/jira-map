@@ -2,6 +2,7 @@ import fs, {Dirent} from 'node:fs'
 import path from 'node:path'
 
 export const rawDataDir = path.resolve(import.meta.dirname, '../data-raw')
+export const additionalDataDir = path.resolve(import.meta.dirname, '../data-additional')
 export const dataDir = path.resolve(import.meta.dirname, '../data')
 export const simplifiedDataDir = path.resolve(import.meta.dirname, '../data-simplified')
 

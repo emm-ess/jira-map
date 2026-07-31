@@ -1,7 +1,15 @@
 import fs from 'node:fs'
 import type {DataRaw} from '../types/data-raw.ts'
 import type {Data} from '../types/data.ts'
-import {getJsonFilesOfDirectory, dataDir, readJsonFile, writeArray, writeMap} from './util.ts'
+import {
+    getJsonFilesOfDirectory,
+    dataDir,
+    readJsonFile,
+    writeArray,
+    writeMap,
+    readMap,
+    additionalDataDir,
+} from './util.ts'
 
 // scrapping the data via this script was planned but the instance doesn't allow it. So it's manually downloaded
 // files and a script for data reduction/extraction
@@ -17,6 +25,16 @@ const links = new Map<string, Data.IssueLink>()
 const statuses = new Map<string, Data.Status>()
 const issueType = new Map<string, Data.IssueType>()
 const issues: Data.Issue[] = []
+
+const userMeta = readMap<UserMetaData>('userMeta.json', additionalDataDir)
+const userReplacements = new Map<string, string>(
+    userMeta.values()
+        .filter((entry) => entry.combine && entry.combine.length > 1)
+        .flatMap((entry) => {
+            const mainKey = entry.combine![0]
+            return entry.combine!.slice(1).map((key) => [key, mainKey])
+        })
+)
 
 function processSprintString(sprintStrings: DataRaw.SprintString[] | null): string[] | undefined {
     if (!sprintStrings?.length) {
@@ -61,14 +79,18 @@ function processUser<T extends DataRaw.User | undefined | null>(rawUser: T): T e
         return
     }
 
-    user.set(rawUser.key, {
-        key: rawUser.key,
+    const key = rawUser.key
+    user.set(key, {
+        key,
         name: rawUser.name,
         avatarUrls: rawUser.avatarUrls,
         displayName: rawUser.displayName,
     })
 
-    return rawUser.key
+    // return key for main user
+    return userReplacements.has(key)
+        ? userReplacements.get(key)
+        : key
 }
 
 function processComponent(rawComponent: DataRaw.ProjectComponent): string {
@@ -228,7 +250,10 @@ function processIssue(issue: DataRaw.Issue): Data.Issue {
 }
 
 function fixMentionedUsers() {
-    const traversedUsers = new Map(user.entries().map(([key, user]) => [user.name, key]))
+    const traversedUsers = new Map(user.values().map((user) => [
+        user.name,
+        userReplacements.get(user.key) || user.key,
+    ]))
     function traverseUser(users: string[]): string[] {
         return users.map((user) => traversedUsers.get(user) || user)
     }
@@ -241,10 +266,26 @@ function fixMentionedUsers() {
     })
 }
 
-function fixInactiveUser() {
-    user.values().forEach((user) => {
-        if (user.displayName.endsWith(' [X]')) {
-            user.displayName = user.displayName.slice(0, -4)
+type UserMetaData = {
+    hide?: boolean
+    combine?: string[]
+    displayName?: string
+}
+
+function fixUser() {
+    user.values().forEach((userEntry) => {
+        const meta = userMeta.get(userEntry.key)
+        if (meta?.hide || userReplacements.has(userEntry.key)) {
+            user.delete(userEntry.key)
+            return
+        }
+
+        if (meta?.displayName) {
+            userEntry.displayName = meta.displayName
+        }
+
+        if (userEntry.displayName.endsWith(' [X]')) {
+            userEntry.displayName = userEntry.displayName.slice(0, -4)
         }
     })
 }
@@ -260,7 +301,7 @@ async function main() {
             processIssue(issue)
         })
         fixMentionedUsers()
-        fixInactiveUser()
+        fixUser()
         process.stdout.write(`\r${dirent.name} done`)
     }
 

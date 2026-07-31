@@ -3,7 +3,9 @@ import type {DataRaw} from './data-raw'
 declare namespace Data {
     // User
     //------------------
-    export type User = Pick<DataRaw.User, 'key' | 'avatarUrls' | 'displayName' | 'name'>
+    export type User = Pick<DataRaw.User, 'key' | 'avatarUrls' | 'displayName' | 'name'> & {
+        combine?: string[]
+    }
 
     export type UserFile = {
         /** key is field `key` of user */
