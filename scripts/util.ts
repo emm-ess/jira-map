@@ -8,12 +8,14 @@ export const simplifiedDataDir = path.resolve(import.meta.dirname, '../data-simp
 
 export function getJsonFilesOfDirectory(): Dirent[] {
     return fs.readdirSync(rawDataDir, {withFileTypes: true})
-        .filter((dirent, index) => dirent.isFile() && dirent.name.endsWith('.json'))
+        .filter((dirent) => dirent.isFile() && dirent.name.endsWith('.json'))
 }
 
-export function readJsonFile<T>(fileName: string, dir = rawDataDir): T {
+export function readJsonFile<T extends {}>(fileName: string, dir = rawDataDir): T {
     const file = path.resolve(dir, fileName)
-    return JSON.parse(fs.readFileSync(file, 'utf-8'))
+    return fs.existsSync(file)
+        ? JSON.parse(fs.readFileSync(file, 'utf-8'))
+        : {}
 }
 
 export function readMap<T>(filename: string, dir = dataDir): Map<string, T> {
@@ -25,12 +27,19 @@ export function readArray<T>(filename: string, dir = dataDir): T[] {
     return readJsonFile<T[]>(filename, dir)
 }
 
+function ensureDir(filename: string): void {
+    const dirname = path.dirname(filename)
+    fs.mkdirSync(dirname, {recursive: true})
+}
+
 export function writeMap(data: Map<string, unknown>, name: string, dir = dataDir) {
     const file = path.resolve(dir, `${name}.json`)
+    ensureDir(file)
     fs.writeFileSync(file, JSON.stringify(Object.fromEntries(data), null, 2))
 }
 
 export function writeArray(data: unknown[], name: string, dir = dataDir) {
     const file = path.resolve(dir, `${name}.json`)
+    ensureDir(file)
     fs.writeFileSync(file, JSON.stringify(data, null, 2))
 }

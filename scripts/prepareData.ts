@@ -1,14 +1,28 @@
 import type {ElementDefinition} from 'cytoscape'
-import fs from 'node:fs'
+import type {DataAdditional} from '../types/data-additional.d.ts'
 import type {Data} from '../types/data.ts'
 import {AVAILABLE_EDGES, AVAILABLE_NODE_TYPES, EDGE_TYPE, NODE_TYPE} from './const.ts'
 import type {CommentMentions} from './evaluateData.ts'
-import {dataDir, readJsonFile, readMap, simplifiedDataDir, writeArray} from './util.ts'
+import {additionalDataDir, dataDir, readJsonFile, readMap, simplifiedDataDir, writeArray} from './util.ts'
 
+// additional user-provided data
+const issueMeta = readMap<DataAdditional.IssueMeta>('issueMeta.json', additionalDataDir)
+
+// exported & normalized data from jira
 const users = readMap<Data.User>('users.json', dataDir)
 const issueTypes = readMap<Data.IssueType>('types.json', dataDir)
 const sprints = readMap<Data.Sprint>('sprints.json', dataDir)
-const issues = readJsonFile<Data.Issue[]>('issues.json', dataDir)
+const issues = readMap<Data.Issue>('issues.json', dataDir)
+
+
+
+function applyMetaData(): void {
+    for (const issueId of issues.keys()) {
+        if (issueMeta.get(issueId)?.hide) {
+            issues.delete(issueId)
+        }
+    }
+}
 
 /* ****************+
  * NODES
@@ -57,17 +71,20 @@ function prepareSprints(): void {
 }
 
 function prepareIssues(): void {
-    const simplifiedIssues = issues.map<ElementDefinition>((issue) => ({
-        group: 'nodes',
-        data: {
-            type: NODE_TYPE.ISSUE,
-            id: issue.id,
-            key: issue.key,
-            issueType: issueTypes.get(issue.issuetype)?.name,
-            summary: issue.summary,
-            status: issue.status,
-        }
-    }))
+    const simplifiedIssues = issues.values().map<ElementDefinition>((issue) => ({
+            group: 'nodes',
+            data: {
+                type: NODE_TYPE.ISSUE,
+                id: issue.id,
+                key: issue.key,
+                issueType: issueTypes.get(issue.issuetype)?.name,
+                summary: issue.summary,
+                status: issue.status,
+                sprints: issue.sprints,
+                area: issueMeta.get(issue.id)?.area,
+                components: issueMeta.get(issue.id)?.components || issue.components
+            }
+        })).toArray()
     writeArray(simplifiedIssues, AVAILABLE_NODE_TYPES.ISSUE.filename, simplifiedDataDir)
 }
 
@@ -155,35 +172,36 @@ function prepareMentions(): void {
 }
 
 function prepareEdgesSprintIssue(): void {
-    // @ts-expect-error we do filter for undefined
-    const sprintIssueEdges: ElementDefinition[] = issues.flatMap((issue) => issue.sprints?.map((sprint) => ({
+    const sprintIssueEdges = issues.values().flatMap((issue) => (issue.sprints || []).map((sprint) => ({
         group: 'edges',
         data: {
             type: EDGE_TYPE.SPRINT_ISSUE,
-            id: `${sprint}-${issue.key}`,
+            id: `${sprint}-${issue.id}`,
             source: sprint,
-            target: issue.key,
+            target: issue.id,
         }
-    }))).filter(Boolean)
+    }))).filter(Boolean).toArray()
     writeArray(sprintIssueEdges, AVAILABLE_EDGES.SPRINT_ISSUE.filename, simplifiedDataDir)
 }
 
 function prepareEdgesUserIssue(): void {
-    const userIssue = issues.flatMap<ElementDefinition>((issue) =>
+    const userIssue = issues.values().flatMap<ElementDefinition>((issue) =>
         issue.assignedUsersUnique?.map((user) => ({
             group: 'edges',
             data: {
                 type: EDGE_TYPE.USER_ISSUE,
                 id: `${user}-${issue.id}`,
+                source: issue.id,
+                target: user,
             }
-        }))).filter(Boolean)
+        }))).filter(Boolean).toArray()
     writeArray(userIssue, AVAILABLE_EDGES.USER_ISSUE.filename, simplifiedDataDir)
 }
 
 function prepareIssueLinks(): void {
     const issueLinkTypes = readMap<Data.IssueLinkType>('issueLinkTypes.json', dataDir)
     const issueLinks = readMap<Data.IssueLink>('links.json', dataDir).values()
-        .filter((link) => link.inwardIssue && link.inwardIssue)
+        .filter((link) => link.inwardIssue && link.outwardIssue && issues.has(link.inwardIssue.id) && issues.has(link.outwardIssue.id))
         .map((link) => ({
             group: 'edges',
             data: {
@@ -198,7 +216,9 @@ function prepareIssueLinks(): void {
 }
 
 function prepareData(): void {
-    fs.mkdirSync(simplifiedDataDir, { recursive: true })
+    // apply Meta-Data
+    applyMetaData()
+
     // Nodes
     prepareUsers()
     prepareComponents()

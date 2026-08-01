@@ -26,22 +26,22 @@ export const AVAILABLE_NODE_TYPES = {
     USER: {
         name: 'User',
         type: NODE_TYPE.USER,
-        filename: 'users',
+        filename: 'nodes/users',
     },
     ISSUE: {
         name: 'Issues',
         type: NODE_TYPE.ISSUE,
-        filename: 'issues',
+        filename: 'nodes/issues',
     },
     SPRINT: {
         name: 'Sprints',
         type: NODE_TYPE.SPRINT,
-        filename: 'sprints',
+        filename: 'nodes/sprints',
     },
     COMPONENT: {
         name: 'Components',
         type: NODE_TYPE.COMPONENT,
-        filename: 'components',
+        filename: 'nodes/components',
     }
 } as const satisfies Record<keyof typeof NODE_TYPE, NodeSelection>
 
@@ -58,37 +58,37 @@ export const AVAILABLE_EDGES = {
     MENTION_PER_USER: {
         name: 'Mentions user -> user (general)',
         type: EDGE_TYPE.MENTION_PER_USER,
-        filename: 'mentionPerUser',
+        filename: 'edges/mentionPerUser',
         nodes: [NODE_TYPE.USER, NODE_TYPE.USER],
     },
     MENTION_PER_TICKET: {
         name: 'Mentions user -> user (per ticket)',
         type: EDGE_TYPE.MENTION_PER_TICKET,
-        filename: 'mentionPerUserPerTicket',
+        filename: 'edges/mentionPerUserPerTicket',
         nodes: [NODE_TYPE.USER, NODE_TYPE.USER],
     },
     MENTION_PER_COMMENT: {
         name: 'Mentions user -> user (per comment)',
         type: EDGE_TYPE.MENTION_PER_COMMENT,
-        filename: 'mentionPerUserPerComment',
+        filename: 'edges/mentionPerUserPerComment',
         nodes: [NODE_TYPE.USER, NODE_TYPE.USER],
     },
     USER_ISSUE: {
         name: 'User <-> issue',
         type: EDGE_TYPE.USER_ISSUE,
-        filename: 'userIssue',
+        filename: 'edges/userIssue',
         nodes: [NODE_TYPE.USER, NODE_TYPE.ISSUE],
     },
     SPRINT_ISSUE: {
         name: 'Sprint <-> issue',
         type: EDGE_TYPE.SPRINT_ISSUE,
-        filename: 'sprintIssueEdges',
+        filename: 'edges/sprintIssueEdges',
         nodes: [NODE_TYPE.SPRINT, NODE_TYPE.ISSUE],
     },
     ISSUE_LINK: {
         name: 'Issue <-> issue',
         type: EDGE_TYPE.ISSUE_LINK,
-        filename: 'issueLinks',
+        filename: 'edges/issueLinks',
         nodes: [NODE_TYPE.ISSUE, NODE_TYPE.ISSUE],
     }
 } as const satisfies Record<keyof typeof EDGE_TYPE, EdgeSelection>

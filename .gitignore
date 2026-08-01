@@ -2,7 +2,7 @@
 ###########################
 .todo
 .notes
-data-*
+data-*/
 data
 *.zip
 manualFixes.csv

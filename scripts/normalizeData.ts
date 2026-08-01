@@ -190,12 +190,24 @@ function processComment(rawComment: DataRaw.Comment): Data.Comment {
     } as Data.Comment
 }
 
+const fieldsWithUserChange = ['assignee', 'reporter']
+function processHistoryItems(items: DataRaw.IssueChangelogHistoryItem[]): DataRaw.IssueChangelogHistoryItem[] {
+    return items.map((item) => {
+        if (fieldsWithUserChange.includes(item.field)) {
+            // yes, that's quick and dirty, but good enough for the purpose. We only care for the id anyways
+            item.from = item.from && (userReplacements.get(item.from) || item.from)
+            item.to = item.to && (userReplacements.get(item.to) || item.to)
+        }
+        return item
+    })
+}
+
 function processChangelog(rawChangelog: DataRaw.IssueChangelog): Data.IssueChangelogHistory[] {
     return rawChangelog.histories.map((history) => ({
         id: history.id,
         author: processUser(history.author),
         created: history.created,
-        items: history.items,
+        items: processHistoryItems(history.items),
     }))
 }
 
@@ -204,9 +216,11 @@ function processAssignedUsers(changelog: Data.IssueChangelogHistory[], currentAs
         history.items
             .filter((item) => item.field === 'assignee')
             .flatMap((item) => [item.from, item.to]),
-    ).filter((user, index, array) => {
-        return !(!user || (index !== 0 && user !== array[index - 1]))
-    })
+        )
+        // since the `to`-user becomes the next `from`-user, we filter those repetitions
+        .filter((user, index, array) => {
+            return !(!user || (index !== 0 && user !== array[index - 1]))
+        })
 
     if (currentAssignee) {
         assignedUsers.unshift(currentAssignee)
@@ -435,7 +449,6 @@ async function main() {
     fixIssueLinks(links, issues)
     fixIssueLinks(subtasksLinks, subtasksList)
 
-    fs.mkdirSync(dataDir, { recursive: true })
     writeMap(user, 'users')
     writeMap(sprints, 'sprints')
     writeMap(components, 'components')
@@ -443,8 +456,8 @@ async function main() {
     writeMap(links, 'links')
     writeMap(statuses, 'statuses')
     writeMap(issueType, 'types')
-    writeArray(issues.values().toArray(), 'issues')
-    writeArray(subtasksList.values().toArray(), 'subtasks')
+    writeMap(issues, 'issues')
+    writeMap(subtasksList, 'subtasks')
     writeMap(subtasksLinks, 'subtasksLinks')
 }
 
