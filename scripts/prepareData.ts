@@ -170,13 +170,12 @@ function prepareEdgesSprintIssue(): void {
 
 function prepareEdgesUserIssue(): void {
     const userIssue = issues.flatMap<ElementDefinition>((issue) =>
-        issue.assignedUsers?.filter((user, index, array) => index !== array.indexOf(user))
-            .map((user) => ({
-                group: 'edges',
-                data: {
-                    type: EDGE_TYPE.USER_ISSUE,
-                    id: `${issue.id}-${user}`,
-                }
+        issue.assignedUsersUnique?.map((user) => ({
+            group: 'edges',
+            data: {
+                type: EDGE_TYPE.USER_ISSUE,
+                id: `${user}-${issue.id}`,
+            }
         }))).filter(Boolean)
     writeArray(userIssue, AVAILABLE_EDGES.USER_ISSUE.filename, simplifiedDataDir)
 }

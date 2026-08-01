@@ -95,11 +95,15 @@ declare namespace Data {
         updateAuthor?: string
         /** The key of the users. If user couldn't be found it will be the name of the user. */
         mentionedUsers: string[]
+        /** The ID of the former subtask. */
+        fromFormerSubtask?: string
     }
 
     export type IssueChangelogHistory = Omit<DataRaw.IssueChangelogHistory, 'author'> & {
         /** The key of the user */
         author: string
+        /** The ID of the former subtask. */
+        fromFormerSubtask?: string
     }
 
     export type Issue = {
@@ -134,7 +138,11 @@ declare namespace Data {
 
         /** The keys of the users. If user couldn't be found it will be the name of the user. */
         mentionedUsers: string[]
+        /** The keys of the users. If user couldn't be found it will be the name of the user. */
+        mentionedUsersUnique: string[]
         /** The keys of the users */
         assignedUsers: string[]
+        /** The keys of the users */
+        assignedUsersUnique: string[]
     }
 }

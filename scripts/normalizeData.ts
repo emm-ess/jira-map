@@ -24,7 +24,12 @@ const issueLinkTypes = new Map<string, Data.IssueLinkType>()
 const links = new Map<string, Data.IssueLink>()
 const statuses = new Map<string, Data.Status>()
 const issueType = new Map<string, Data.IssueType>()
-const issues: Data.Issue[] = []
+const issues = new Map<string, Data.Issue>()
+
+/** key: subtask id, value: parent id */
+const subtasksMap = new Map<string, string>()
+const subtasksList = new Map<string, Data.Issue>()
+const subtasksLinks = new Map<string, Data.IssueLink>()
 
 const userMeta = readMap<UserMetaData>('userMeta.json', additionalDataDir)
 const userReplacements = new Map<string, string>(
@@ -216,21 +221,30 @@ function processIssue(issue: DataRaw.Issue): Data.Issue {
     const changelog = processChangelog(issue.changelog)
     const comments = issue.fields.comment.comments.map(processComment)
 
+    const subtasks = issue.fields.subtasks.map((subtask) => {
+        subtasksMap.set(subtask.id, issue.id)
+        processLinkedIssue(subtask)
+        return subtask.id
+    })
+
+    const assignedUsers = processAssignedUsers(changelog, assignee)
+    const assignedUsersUnique = [...new Set(assignedUsers)]
+    const mentionedUsers = comments.flatMap((comment) => comment.mentionedUsers)
+    const mentionedUsersUnique = [...new Set(mentionedUsers)]
+
     const processedIssue: Data.Issue = {
         id: issue.id,
         key: issue.key,
         assignee,
-        assignedUsers: processAssignedUsers(changelog, assignee),
-        mentionedUsers: comments.flatMap((comment) => comment.mentionedUsers),
+        assignedUsers,
+        assignedUsersUnique,
+        mentionedUsers,
+        mentionedUsersUnique,
         sprints: processSprintString(issue.fields.customfield_10005),
         summary: issue.fields.summary.replaceAll(REST_REGEX, '').trim(),
         issuetype: processIssueType(issue.fields.issuetype),
         lastViewed: issue.fields.lastViewed,
         components: issue.fields.components.map(processComponent),
-        subtasks: issue.fields.subtasks.map((subtask) => {
-            processLinkedIssue(subtask)
-            return subtask.id
-        }),
         created: issue.fields.created,
         description: issue.fields.description,
         reporter: processUser(issue.fields.reporter),
@@ -239,15 +253,123 @@ function processIssue(issue: DataRaw.Issue): Data.Issue {
         status: processStatus(issue.fields.status),
         comments,
         changelog,
+        subtasks,
     }
 
     if (issue.fields.customfield_10002 !== null) {
         processedIssue.storypoints = Math.round(issue.fields.customfield_10002)
     }
 
-    issues.push(processedIssue)
+    issues.set(issue.id, processedIssue)
 
     return processedIssue
+}
+
+function filterSubtasks(): void {
+    for (const [subtaskId, parentId] of subtasksMap) {
+        const parent = issues.get(parentId)
+        const subtask = issues.get(subtaskId)
+
+        if (!parent || !subtask) {
+            if (!parent) {
+                console.error(`Parent ${parentId} not found`)
+            }
+            if (!subtask) {
+                console.error(`Subtask ${subtaskId} not found`)
+            }
+            continue
+        }
+
+        issues.delete(subtaskId)
+        subtasksList.set(subtaskId, subtask)
+
+        subtask.issuelinks.forEach((linkId) => {
+            const link = links.get(linkId)
+            if (!link) {
+                return
+            }
+            subtasksLinks.set(linkId, {...link})
+
+            if (link.inwardIssue?.id === subtask.id) {
+                link.inwardIssue.id = parent.id
+                link.inwardIssue.issuetype = parent.issuetype
+            }
+            if (link.outwardIssue?.id === subtask.id) {
+                link.outwardIssue.id = parent.id
+                link.outwardIssue.issuetype = parent.issuetype
+            }
+
+            if (link.inwardIssue?.id === link.outwardIssue?.id) {
+                links.delete(linkId)
+                const index = parent.issuelinks.indexOf(linkId)
+                if (index !== -1) {
+                    parent.issuelinks.splice(index, 1)
+                }
+            }
+            else if (!parent.issuelinks.includes(linkId)) {
+                parent.issuelinks.push(linkId)
+            }
+        })
+
+        parent.comments.push(...subtask.comments.map((comment) => ({
+            ...comment,
+            fromFormerSubtask: subtask.id,
+        })))
+        parent.changelog.push(...subtask.changelog.map((history) => ({
+            ...history,
+            fromFormerSubtask: subtask.id,
+        })))
+        parent.assignedUsers.push(...subtask.assignedUsers)
+        parent.assignedUsersUnique = [...new Set(parent.assignedUsers)]
+        parent.mentionedUsers.push(...subtask.mentionedUsers)
+        parent.mentionedUsersUnique = [...new Set(parent.mentionedUsers)]
+    }
+}
+
+const POLISHING_TASKS_REGEX = /^Nacharbeiten.*Sprint.*\d{1,3}$/i
+function filterPolishingTickets(): void {
+    let countDeletedPolishingTasks = 0
+    for (const issue of issues.values()) {
+        if (POLISHING_TASKS_REGEX.test(issue.summary)) {
+            countDeletedPolishingTasks++
+            issues.delete(issue.id)
+            for (const subtask of issue.subtasks) {
+                issues.delete(subtask)
+                subtasksMap.delete(subtask)
+            }
+        }
+    }
+    console.log(`Deleted ${countDeletedPolishingTasks} polishing tickets`)
+}
+
+function applyIssueMeta(): void {
+    const issueMeta = readMap<{hide?: boolean}>('issueMeta.json', additionalDataDir)
+    for (const [issueId, meta] of issueMeta) {
+        if (meta.hide) {
+            issues.delete(issueId)
+            subtasksMap.delete(issueId)
+        }
+    }
+}
+
+function fixIssueLinks(linkMap: Map<string, Data.IssueLink>, issueMap: Map<string, Data.Issue>): void {
+    const deletedIssueLinks = new Set<string>()
+    for (const [linkId, link] of linkMap) {
+        if (link.inwardIssue?.id === link.outwardIssue?.id
+            || !link.inwardIssue
+            || !link.outwardIssue
+            || (!issueMap.has(link.inwardIssue.id) && !issueMap.has(link.outwardIssue.id))
+        ) {
+            deletedIssueLinks.add(linkId)
+        }
+    }
+    for (const linkId of deletedIssueLinks) {
+        linkMap.delete(linkId)
+        for (const issue of issueMap.values()) {
+            issue.issuelinks = issue.issuelinks.filter((id) => id !== linkId)
+        }
+    }
+    console.log(`Deleted ${deletedIssueLinks.size} issue links`)
 }
 
 function fixMentionedUsers() {
@@ -301,10 +423,17 @@ async function main() {
             process.stdout.write(`\r${issue.key}`)
             processIssue(issue)
         })
-        fixMentionedUsers()
-        fixUser()
         process.stdout.write(`\r${dirent.name} done`)
     }
+    process.stdout.write('\n')
+
+    fixMentionedUsers()
+    fixUser()
+    filterSubtasks()
+    filterPolishingTickets()
+    applyIssueMeta()
+    fixIssueLinks(links, issues)
+    fixIssueLinks(subtasksLinks, subtasksList)
 
     fs.mkdirSync(dataDir, { recursive: true })
     writeMap(user, 'users')
@@ -314,7 +443,9 @@ async function main() {
     writeMap(links, 'links')
     writeMap(statuses, 'statuses')
     writeMap(issueType, 'types')
-    writeArray(issues, 'issues')
+    writeArray(issues.values().toArray(), 'issues')
+    writeArray(subtasksList.values().toArray(), 'subtasks')
+    writeMap(subtasksLinks, 'subtasksLinks')
 }
 
 main()
