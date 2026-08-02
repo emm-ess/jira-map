@@ -38,11 +38,27 @@
             </fieldset>
         </form>
     </main>
+
+    <dialog
+        ref="dialog"
+        class="selected-item"
+        popover
+    >
+        <dl v-if="selectedItem">
+            <template
+                v-for="[key, value] in Object.entries(selectedItem)"
+                :key="key"
+            >
+                <dt>{{ key }}</dt>
+                <dd>{{ value }}</dd>
+            </template>
+        </dl>
+    </dialog>
 </template>
 
 <script lang="ts" setup>
-import cytoscape from 'cytoscape'
-import {nextTick, onMounted, ref, useTemplateRef, watch} from 'vue'
+import cytoscape, {type ElementDefinition, type EventObject} from 'cytoscape'
+import {onMounted, ref, useTemplateRef, watch} from 'vue'
 
 import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
@@ -59,10 +75,13 @@ import {loadData} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
+const dialog = useTemplateRef('dialog')
 
 const layout = ref(LAYOUTS[0])
 const selectedNodes = ref<NodeSelection[]>([AVAILABLE_NODE_TYPES.USER])
 const selectedEdges = ref<EdgeSelection[]>([AVAILABLE_EDGES.MENTION_PER_USER])
+
+const selectedItem = ref<ElementDefinition>()
 
 let cy: cytoscape.Core
 
@@ -74,12 +93,18 @@ onMounted(async () => {
     await updateNodes()
     await updateEdges()
     cy.layout(layout.value.layout).run()
+    cy.on('click', 'node', selectItem)
 })
 
 watch(layout, (newLayout) => {
     cy.clearQueue()
     cy.layout(newLayout.layout).run()
 })
+
+function selectItem(element: EventObject): void {
+    selectedItem.value = element.target.data()
+    dialog.value?.showPopover()
+}
 
 function isEdgePossible(edge: EdgeSelection): boolean {
     return edge.nodes.every((nodeType) => selectedNodes.value.some((selected) => selected.type === nodeType))
@@ -138,4 +163,8 @@ fieldset
     display: flex
     flex-direction: column
     gap: 8px
+
+dd
+    margin: 0 0 0 16px
+    padding: 0
 </style>

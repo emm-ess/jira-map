@@ -82,7 +82,9 @@ function prepareIssues(): void {
                 status: issue.status,
                 sprints: issue.sprints,
                 area: issueMeta.get(issue.id)?.area,
-                components: issueMeta.get(issue.id)?.components || issue.components
+                components: issueMeta.get(issue.id)?.components || issue.components,
+                assignedUsers: issue.assignedUsers,
+                mentionedUsers: issue.mentionedUsers,
             }
         })).toArray()
     writeArray(simplifiedIssues, AVAILABLE_NODE_TYPES.ISSUE.filename, simplifiedDataDir)

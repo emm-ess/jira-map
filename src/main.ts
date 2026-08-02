@@ -1,12 +1,12 @@
-import { createApp } from 'vue'
+import './style.css'
 
-import cytoscape from 'cytoscape';
-import cola from 'cytoscape-cola';
+import cytoscape from 'cytoscape'
+import cola from 'cytoscape-cola'
+import {createApp} from 'vue'
 
 import App from './App.vue'
-// import './style.css'
 
-cytoscape.use( cola )
+cytoscape.use(cola)
 
 const app = createApp(App)
 app.mount('#app')
