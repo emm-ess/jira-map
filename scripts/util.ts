@@ -43,3 +43,7 @@ export function writeArray(data: unknown[], name: string, dir = dataDir) {
     ensureDir(file)
     fs.writeFileSync(file, JSON.stringify(data, null, 2))
 }
+
+export function unique<T>(values: T[]): T[] {
+    return [...new Set(values)].filter(Boolean)
+}

@@ -70,7 +70,20 @@
                 :key="key"
             >
                 <dt>{{ key }}</dt>
-                <dd>{{ value }}</dd>
+                <dd>
+                    <template v-if="key === 'issues'">
+                        <article v-for="issue in value" :key="issue.key">
+                            <h1>{{ issue.key }}: {{ issue.summary }}</h1>
+                            <pre>
+                                {{ issue.description }}
+                            </pre>
+                            <pre>{{ restIssueFields(issue) }}</pre>
+                        </article>
+                    </template>
+                    <template v-else>
+                        {{ value }}
+                    </template>
+                </dd>
             </template>
         </dl>
     </dialog>
@@ -92,6 +105,7 @@ import {
     type EdgeType,
     type NodeSelection,
 } from '../scripts/const.ts'
+import type {Data} from '../types/data'
 import {AVAILABLE_LINES, loadData} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
 
@@ -113,13 +127,18 @@ onMounted(async () => {
         style: cytoscopeStyle,
     })
     await updateLines()
-    await updateNodes()
-    await updateEdges()
+    // await updateNodes()
+    // await updateEdges()
     updateLayout()
     cy.on('click', 'node', selectItem)
 })
 
 watch(layout, updateLayout)
+
+function restIssueFields(issue: Data.Issue): string {
+    const {key, summary, description, assignee, assignedUsers, mentionedUsers, lastViewed, ...rest} = issue
+    return JSON.stringify(rest, null, 2)
+}
 
 function updateLayout() {
     cy.clearQueue()
@@ -211,6 +230,11 @@ fieldset
     display: flex
     flex-direction: column
     gap: 8px
+
+dialog
+    max-width: 80%
+    max-height: 80%
+    overflow: auto
 
 dd
     margin: 0 0 0 16px

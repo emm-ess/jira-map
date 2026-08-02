@@ -3,7 +3,7 @@ import type {DataAdditional} from '../types/data-additional.d.ts'
 import type {Data} from '../types/data.ts'
 import {AVAILABLE_EDGES, AVAILABLE_NODE_TYPES, EDGE_TYPE, NODE_TYPE} from './const.ts'
 import type {CommentMentions} from './evaluateData.ts'
-import {additionalDataDir, dataDir, readJsonFile, readMap, simplifiedDataDir, writeArray} from './util.ts'
+import {additionalDataDir, dataDir, readJsonFile, readMap, simplifiedDataDir, unique, writeArray} from './util.ts'
 
 // additional user-provided data
 const issueMeta = readMap<DataAdditional.IssueMeta>('issueMeta.json', additionalDataDir)
@@ -38,23 +38,21 @@ class AreaGraph {
     }
 
     getRootNode(key: string): string[] {
-        const visited = new Set<string>()
-
-        const getRoots = (currentKey: string): string[] => {
-            if (visited.has(currentKey)) {
+        const getRoots = (currentKey: string, path: Set<string>): string[] => {
+            if (path.has(currentKey)) {
                 return [currentKey]
             }
 
-            const parentKeys = this.getParentNodes(currentKey)
-            if (!parentKeys?.length) {
+            const parentKeys = this.getParentNodes(currentKey) ?? []
+            if (parentKeys.length === 0) {
                 return [currentKey]
             }
 
-            visited.add(currentKey)
-            return [...new Set(parentKeys.flatMap((parentKey) => getRoots(parentKey)))]
+            const nextPath = new Set(path).add(currentKey)
+            return unique(parentKeys.flatMap((parentKey) => getRoots(parentKey, nextPath)))
         }
 
-        return getRoots(key)
+        return getRoots(key, new Set())
     }
 
     getParentNodes(key: string): string[] | void {
@@ -290,13 +288,16 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
             data: {
                 type: 'station',
                 id: stationId,
+                issues: station.issues.map((issue) => {
+                    const {changelog, comments, ...rest} = issue
+                    return {...rest}
+                }),
+                // it would be more precise to check the date of the mention/assignment and check that against the sprint
+                assignedUsers: unique(station.issues.flatMap((issue) => issue.assignedUsersUnique ?? [])),
+                mentionedUsers: unique(station.issues.flatMap((issue) => issue.mentionedUsersUnique ?? [])),
+                areas: unique(station.issues.flatMap((issue) => issueMeta.get(issue.id)?.area ?? []))
             },
         }
-        const issueNodes = station.issues.map<ElementDefinition>((issue) => {
-            const node = issueToNode(issue)
-            node.data.parent = stationId
-            return node
-        })
         const lineSegment: ElementDefinition | undefined = index > 0
             ? {
                 group: 'edges',
@@ -309,7 +310,7 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 },
             }
             : undefined
-        return [stationNode, ...issueNodes, lineSegment]
+        return [lineSegment, stationNode]
     }).filter(Boolean)
 }
 
@@ -329,7 +330,15 @@ function createTransportLines(): void {
             })
         })
 
-    const lines = transportGroups.entries().map<[area: string, ElementDefinition[]]>(([area, areaIssues]) => {
+    const lines = transportGroups.entries()
+        .filter(([area, areaIssues]) => {
+            const multipleSprints = unique(areaIssues.flatMap((issue) => issue.sprints ?? [])).length > 1
+            if (!multipleSprints) {
+                console.warn(`Area ${area} has only one sprint. Skipping line generation.`)
+            }
+            return multipleSprints
+        })
+        .map<[area: string, ElementDefinition[]]>(([area, areaIssues]) => {
         // Group issues by sprint. An issue can occur in more than one stop.
         const issuesBySprint = new Map<string, Data.Issue[]>()
         areaIssues.forEach((issue) => {
