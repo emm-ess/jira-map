@@ -92,14 +92,16 @@ onMounted(async () => {
     })
     await updateNodes()
     await updateEdges()
-    cy.layout(layout.value.layout).run()
+    updateLayout()
     cy.on('click', 'node', selectItem)
 })
 
-watch(layout, (newLayout) => {
+watch(layout, updateLayout)
+
+function updateLayout() {
     cy.clearQueue()
-    cy.layout(newLayout.layout).run()
-})
+    cy.layout(layout.value.layout).run()
+}
 
 function selectItem(element: EventObject): void {
     selectedItem.value = element.target.data()
@@ -132,6 +134,7 @@ async function updateNodes() {
         cy.nodes().filter((element) => !nodesToKeep.has(element.data().type)),
     )
     cy.add(data.flat())
+    updateLayout()
 }
 
 async function updateEdges() {
@@ -140,6 +143,7 @@ async function updateEdges() {
     const edgesToKeep = new Set(selectedEdges.value.map((edgeType) => edgeType.type))
     cleanEdges(edgesToKeep)
     cy.add(data.flat())
+    updateLayout()
 }
 </script>
 
