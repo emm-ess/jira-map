@@ -24,6 +24,71 @@ function applyMetaData(): void {
     }
 }
 
+
+/* ****************+
+ * HElPER
+ *******************/
+// provide a graph for traversing data
+class AreaGraph {
+    // data consist of key -> parentKeys[]
+    data = readMap<string[]>('areaMeta.json', additionalDataDir)
+
+    getRootNodes(keys: string[]): string[] {
+        return [...new Set(keys.flatMap((key) => this.getRootNode(key)))]
+    }
+
+    getRootNode(key: string): string[] {
+        const visited = new Set<string>()
+
+        const getRoots = (currentKey: string): string[] => {
+            if (visited.has(currentKey)) {
+                return [currentKey]
+            }
+
+            const parentKeys = this.getParentNodes(currentKey)
+            if (!parentKeys?.length) {
+                return [currentKey]
+            }
+
+            visited.add(currentKey)
+            return [...new Set(parentKeys.flatMap((parentKey) => getRoots(parentKey)))]
+        }
+
+        return getRoots(key)
+    }
+
+    getParentNodes(key: string): string[] | void {
+        return this.data.get(key)
+    }
+
+    // seems faulty
+    // getChildren(key: string): string[] {
+    //     return this.data.entries()
+    //         .filter(([, parentKeys]) => parentKeys.includes(key))
+    //         .map(([childKey]) => childKey)
+    //         .toArray()
+    // }
+}
+
+function issueToNode(issue: Data.Issue): ElementDefinition {
+    return {
+        group: 'nodes',
+        data: {
+            type: NODE_TYPE.ISSUE,
+            id: issue.id,
+            key: issue.key,
+            issueType: issueTypes.get(issue.issuetype)?.name,
+            summary: issue.summary,
+            status: issue.status,
+            sprints: issue.sprints,
+            area: issueMeta.get(issue.id)?.area,
+            components: issueMeta.get(issue.id)?.components || issue.components,
+            assignedUsers: issue.assignedUsers,
+            mentionedUsers: issue.mentionedUsers,
+        }
+    }
+}
+
 /* ****************+
  * NODES
  *******************/
@@ -71,24 +136,12 @@ function prepareSprints(): void {
 }
 
 function prepareIssues(): void {
-    const simplifiedIssues = issues.values().map<ElementDefinition>((issue) => ({
-            group: 'nodes',
-            data: {
-                type: NODE_TYPE.ISSUE,
-                id: issue.id,
-                key: issue.key,
-                issueType: issueTypes.get(issue.issuetype)?.name,
-                summary: issue.summary,
-                status: issue.status,
-                sprints: issue.sprints,
-                area: issueMeta.get(issue.id)?.area,
-                components: issueMeta.get(issue.id)?.components || issue.components,
-                assignedUsers: issue.assignedUsers,
-                mentionedUsers: issue.mentionedUsers,
-            }
-        })).toArray()
+    const simplifiedIssues = issues.values()
+        .map<ElementDefinition>((issue) => issueToNode(issue))
+        .toArray()
     writeArray(simplifiedIssues, AVAILABLE_NODE_TYPES.ISSUE.filename, simplifiedDataDir)
 }
+
 
 /* ****************+
  * EDGES
@@ -217,6 +270,117 @@ function prepareIssueLinks(): void {
     writeArray(issueLinks, AVAILABLE_EDGES.ISSUE_LINK.filename, simplifiedDataDir)
 }
 
+
+/* ****************+
+ * Transport-Lines
+ *******************/
+
+const noYetDoneSprint = 'future'
+type Station = {
+    sprintId: string
+    issues: Data.Issue[]
+}
+
+function buildLine(area: string, stations: Station[]): ElementDefinition[] {
+    // @ts-expect-error
+    return stations.flatMap((station, index, array) => {
+        const stationId = `${area}-station-${station.sprintId}`
+        const stationNode: ElementDefinition = {
+            group: 'nodes',
+            data: {
+                type: 'station',
+                id: stationId,
+            },
+        }
+        const issueNodes = station.issues.map<ElementDefinition>((issue) => {
+            const node = issueToNode(issue)
+            node.data.parent = stationId
+            return node
+        })
+        const lineSegment: ElementDefinition | undefined = index > 0
+            ? {
+                group: 'edges',
+                data: {
+                    type: 'segment',
+                    area,
+                    id: `${area}-segment-${station.sprintId}`,
+                    source: `${area}-station-${array[index - 1].sprintId}`,
+                    target: stationId,
+                },
+            }
+            : undefined
+        return [stationNode, ...issueNodes, lineSegment]
+    }).filter(Boolean)
+}
+
+function createTransportLines(): void {
+    const areaGraph = new AreaGraph()
+    const transportGroups = new Map<string, Data.Issue[]>()
+
+    issues.values()
+        .filter((issue) => issueMeta.get(issue.id)?.area)
+        .forEach((issue) => {
+            const areas = issueMeta.get(issue.id)?.area ?? []
+            areaGraph.getRootNodes(areas).forEach((area) => {
+                if (!transportGroups.has(area)) {
+                    transportGroups.set(area, [])
+                }
+                transportGroups.get(area)?.push(issue)
+            })
+        })
+
+    const lines = transportGroups.entries().map<[area: string, ElementDefinition[]]>(([area, areaIssues]) => {
+        // Group issues by sprint. An issue can occur in more than one stop.
+        const issuesBySprint = new Map<string, Data.Issue[]>()
+        areaIssues.forEach((issue) => {
+            const issueSprints = issue.sprints?.length
+                ? issue.sprints.map((sprintId) => {
+                    return !!sprints.get(sprintId)?.startDate
+                        ? sprintId
+                        : noYetDoneSprint
+                })
+                : [noYetDoneSprint]
+            issueSprints.forEach((sprintId) => {
+                const sprintIssues = issuesBySprint.get(sprintId) ?? []
+                sprintIssues.push(issue)
+                issuesBySprint.set(sprintId, sprintIssues)
+            })
+        })
+
+        const sprintIds = issuesBySprint.keys().toArray().sort((sprintA, sprintB) => {
+            if (sprintA === noYetDoneSprint) {
+                return 1
+            }
+            if (sprintB === noYetDoneSprint) {
+                return -1
+            }
+
+            const startDateA = sprints.get(sprintA)!.startDate!
+            const startDateB = sprints.get(sprintB)!.startDate!
+            return startDateA.localeCompare(startDateB)
+        })
+
+        const stations = sprintIds.map((sprintId) => ({sprintId, issues: issuesBySprint.get(sprintId) ?? []}))
+        return [normalizeFilename(area), buildLine(area, stations)]
+    }).toArray()
+
+    for (const [area, elements] of lines) {
+        writeArray(elements, `lines/${area}`, simplifiedDataDir)
+    }
+    const areasWithLines = lines
+        .map((line) => line[0])
+        .sort((a, b) => a.localeCompare(b))
+    writeArray(areasWithLines, 'lines', simplifiedDataDir)
+}
+
+function normalizeFilename(name: string): string {
+    return name.toLowerCase()
+        .replaceAll(' ', '-')
+        .replaceAll('ä', 'ae')
+        .replaceAll('ö', 'oe')
+        .replaceAll('ü', 'ue')
+}
+
 function prepareData(): void {
     // apply Meta-Data
     applyMetaData()
@@ -232,5 +396,8 @@ function prepareData(): void {
     prepareEdgesSprintIssue()
     prepareEdgesUserIssue()
     prepareIssueLinks()
+
+    // Transport lines
+    createTransportLines()
 }
 prepareData()

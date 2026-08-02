@@ -12,29 +12,49 @@
             </base-select>
 
             <fieldset>
-                <legend>Nodes</legend>
-                <base-checkbox
-                    v-for="nodeType in Object.values(AVAILABLE_NODE_TYPES)"
-                    :id="nodeType.type"
-                    :key="nodeType.type"
-                    v-model="selectedNodes"
-                    :value="nodeType"
-                >
-                    {{ nodeType.name }}
-                </base-checkbox>
+                <legend>"Lines"</legend>
+                <div class="scrollwrapper">
+                    <base-checkbox
+                        v-for="line in AVAILABLE_LINES"
+                        :id="line.name"
+                        :key="line.name"
+                        v-model="selectedLines"
+                        :value="line"
+                    >
+                        {{ line.name }}
+                    </base-checkbox>
+                </div>
             </fieldset>
+
+            <fieldset>
+                <legend>Nodes</legend>
+                <div class="scrollwrapper">
+                    <base-checkbox
+                        v-for="nodeType in Object.values(AVAILABLE_NODE_TYPES)"
+                        :id="nodeType.type"
+                        :key="nodeType.type"
+                        v-model="selectedNodes"
+                        :value="nodeType"
+                    >
+                        {{ nodeType.name }}
+                    </base-checkbox>
+                </div>
+            </fieldset>
+
             <fieldset>
                 <legend>Edges</legend>
-                <base-checkbox
-                    v-for="edgeType in Object.values(AVAILABLE_EDGES)"
-                    :id="edgeType.type"
-                    :key="edgeType.type"
-                    v-model="selectedEdges"
-                    :value="edgeType"
-                    :disabled="!isEdgePossible(edgeType)"
-                >
-                    {{ edgeType.name }}
-                </base-checkbox>
+                <div class="scrollwrapper">
+                    <base-checkbox
+                        v-for="edgeType in Object.values(AVAILABLE_EDGES)"
+                        :id="edgeType.type"
+                        :key="edgeType.type"
+                        v-model="selectedEdges"
+                        :value="edgeType"
+                        :disabled="!isEdgePossible(edgeType)"
+                    >
+                        {{ edgeType.name }}
+                    </base-checkbox>
+                </div>
             </fieldset>
         </form>
     </main>
@@ -63,6 +83,7 @@ import {onMounted, ref, useTemplateRef, watch} from 'vue'
 import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
 import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
+import {randomSelection} from '@/misc.ts'
 
 import {
     AVAILABLE_EDGES,
@@ -71,15 +92,16 @@ import {
     type EdgeType,
     type NodeSelection,
 } from '../scripts/const.ts'
-import {loadData} from './data.ts'
+import {AVAILABLE_LINES, loadData} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
 const dialog = useTemplateRef('dialog')
 
 const layout = ref(LAYOUTS[0])
-const selectedNodes = ref<NodeSelection[]>([AVAILABLE_NODE_TYPES.USER])
-const selectedEdges = ref<EdgeSelection[]>([AVAILABLE_EDGES.MENTION_PER_USER])
+const selectedLines = ref(randomSelection(AVAILABLE_LINES, 5))
+const selectedNodes = ref<NodeSelection[]>([]) // [AVAILABLE_NODE_TYPES.USER])
+const selectedEdges = ref<EdgeSelection[]>([]) // [AVAILABLE_EDGES.MENTION_PER_USER])
 
 const selectedItem = ref<ElementDefinition>()
 
@@ -90,6 +112,7 @@ onMounted(async () => {
         container: cyEle.value,
         style: cytoscopeStyle,
     })
+    await updateLines()
     await updateNodes()
     await updateEdges()
     updateLayout()
@@ -118,8 +141,24 @@ function cleanEdges(edgeTypeToKeep: Set<EdgeType>): void {
     )
 }
 
+watch(selectedLines, updateLines, {deep: true})
 watch(selectedNodes, updateNodes, {deep: true})
-watch(selectedEdges, updateEdges, {immediate: true, deep: true})
+watch(selectedEdges, updateEdges, {deep: true})
+
+async function updateLines() {
+    // eslint-disable-next-line compat/compat
+    const data = await Promise.all(selectedLines.value.map((nodeType) => loadData(nodeType.filename)))
+    const eles = data.flat()
+    const stuffToKeep = new Set(eles.map((ele) => ele.data.id))
+    cy.remove(
+        cy.nodes().filter((element) => !stuffToKeep.has(element.data().id)),
+    )
+    cy.remove(
+        cy.edges().filter((element) => !stuffToKeep.has(element.data().id)),
+    )
+    cy.add(eles)
+    updateLayout()
+}
 
 async function updateNodes() {
     const edgesToKeep = new Set(selectedEdges.value
@@ -162,8 +201,13 @@ form
     gap: 16px
     padding: 16px
     width: 12.25%
+    height: 100%
 
 fieldset
+    flex: 1 1 auto
+    overflow: auto
+
+.scrollwrapper
     display: flex
     flex-direction: column
     gap: 8px

@@ -1,11 +1,24 @@
 import type {ElementDefinition} from 'cytoscape'
 
+import * as lines from '../data-simplified/lines.json'
+
 const cache = new Map<string, ElementDefinition[]>()
 
 const modules = import.meta.glob(
-    '../data-simplified/**/*.json',
+    '../data-simplified/*/*.json',
     {import: 'default'},
 )
+
+type Line = {
+    name: string
+    filename: string
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
+export const AVAILABLE_LINES = lines.default.map<Line>((line: string) => ({
+    name: line,
+    filename: `lines/${line}`,
+}))
 
 export async function loadData(file: string): Promise<ElementDefinition[]> {
     if (cache.has(file)) {
