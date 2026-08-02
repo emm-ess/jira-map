@@ -18,9 +18,13 @@ export function readJsonFile<T extends {}>(fileName: string, dir = rawDataDir): 
         : {}
 }
 
-export function readMap<T>(filename: string, dir = dataDir): Map<string, T> {
-    const data = readJsonFile<Record<string, T>>(filename, dir)
-    return new Map(Object.entries(data))
+export function readMap<T extends Map<string | number, unknown>>(filename: string, dir = dataDir, keyToNumber = false): T {
+    const data = readJsonFile<Record<string | number, T>>(filename, dir)
+    const entries = keyToNumber
+        ? Object.entries(data).map(([k, v]) => [Number(k), v])
+        : Object.entries(data)
+    // @ts-ignore
+    return new Map(entries) as T
 }
 
 export function readArray<T>(filename: string, dir = dataDir): T[] {
@@ -32,7 +36,7 @@ function ensureDir(filename: string): void {
     fs.mkdirSync(dirname, {recursive: true})
 }
 
-export function writeMap(data: Map<string, unknown>, name: string, dir = dataDir) {
+export function writeMap(data: Map<string | number, unknown>, name: string, dir = dataDir) {
     const file = path.resolve(dir, `${name}.json`)
     ensureDir(file)
     fs.writeFileSync(file, JSON.stringify(Object.fromEntries(data), null, 2))

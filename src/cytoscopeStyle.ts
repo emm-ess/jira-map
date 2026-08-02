@@ -3,6 +3,13 @@ import type {CytoscapeOptions} from 'cytoscape'
 import {EDGE_TYPE, NODE_TYPE} from '../scripts/const.ts'
 
 export const cytoscopeStyle = [{
+    selector: 'node[type="station"]',
+    style: {
+        label: 'data(name)',
+        'background-color': '#eee',
+        'border-color': '#111',
+    },
+}, {
     selector: `node[type="${NODE_TYPE.USER}"]`,
     style: {
         label: 'data(displayName)',

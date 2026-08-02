@@ -1,18 +1,19 @@
 import type {ElementDefinition} from 'cytoscape'
 import type {DataAdditional} from '../types/data-additional.d.ts'
+import type {DataPrepared} from '../types/data-prepared.ts'
 import type {Data} from '../types/data.ts'
 import {AVAILABLE_EDGES, AVAILABLE_NODE_TYPES, EDGE_TYPE, NODE_TYPE} from './const.ts'
 import type {CommentMentions} from './evaluateData.ts'
 import {additionalDataDir, dataDir, readJsonFile, readMap, simplifiedDataDir, unique, writeArray} from './util.ts'
 
 // additional user-provided data
-const issueMeta = readMap<DataAdditional.IssueMeta>('issueMeta.json', additionalDataDir)
+const issueMeta = readMap<DataAdditional.IssueMetaFile>('issueMeta.json', additionalDataDir)
 
 // exported & normalized data from jira
-const users = readMap<Data.User>('users.json', dataDir)
-const issueTypes = readMap<Data.IssueType>('types.json', dataDir)
-const sprints = readMap<Data.Sprint>('sprints.json', dataDir)
-const issues = readMap<Data.Issue>('issues.json', dataDir)
+const users = readMap<Data.UserFile>('users.json', dataDir)
+const issueTypes = readMap<Data.IssueTypeFile>('types.json', dataDir)
+const sprints = readMap<Data.SprintFile>('sprints.json', dataDir, true)
+const issues = readMap<Data.IssueFile>('issues.json', dataDir)
 
 
 
@@ -31,7 +32,7 @@ function applyMetaData(): void {
 // provide a graph for traversing data
 class AreaGraph {
     // data consist of key -> parentKeys[]
-    data = readMap<string[]>('areaMeta.json', additionalDataDir)
+    data = readMap<Map<string, string[]>>('areaMeta.json', additionalDataDir)
 
     getRootNodes(keys: string[]): string[] {
         return [...new Set(keys.flatMap((key) => this.getRootNode(key)))]
@@ -109,7 +110,7 @@ function prepareUsers(): void {
 }
 
 function prepareComponents(): void {
-    const preparedComponents = readMap<Data.Component>('components.json', dataDir).values()
+    const preparedComponents = readMap<Data.ComponentFile>('components.json', dataDir).values()
         .map<ElementDefinition>((component) => ({
             group: 'nodes',
             data: {
@@ -125,7 +126,7 @@ function prepareSprints(): void {
         group: 'nodes',
         data: {
             type: NODE_TYPE.SPRINT,
-            id: sprint.id,
+            id: sprint.id.toString(),
             name: sprint.name,
             goal: sprint.goal,
         }
@@ -230,7 +231,7 @@ function prepareEdgesSprintIssue(): void {
         data: {
             type: EDGE_TYPE.SPRINT_ISSUE,
             id: `${sprint}-${issue.id}`,
-            source: sprint,
+            source: sprint.toString(),
             target: issue.id,
         }
     }))).filter(Boolean).toArray()
@@ -252,8 +253,8 @@ function prepareEdgesUserIssue(): void {
 }
 
 function prepareIssueLinks(): void {
-    const issueLinkTypes = readMap<Data.IssueLinkType>('issueLinkTypes.json', dataDir)
-    const issueLinks = readMap<Data.IssueLink>('links.json', dataDir).values()
+    const issueLinkTypes = readMap<Data.IssueLinkTypeFile>('issueLinkTypes.json', dataDir)
+    const issueLinks = readMap<Data.IssueLinkFile>('links.json', dataDir).values()
         .filter((link) => link.inwardIssue && link.outwardIssue && issues.has(link.inwardIssue.id) && issues.has(link.outwardIssue.id))
         .map((link) => ({
             group: 'edges',
@@ -273,21 +274,28 @@ function prepareIssueLinks(): void {
  * Transport-Lines
  *******************/
 
-const noYetDoneSprint = 'future'
+const noYetDoneSprint = -1
 type Station = {
-    sprintId: string
+    sprintId: number
     issues: Data.Issue[]
 }
 
 function buildLine(area: string, stations: Station[]): ElementDefinition[] {
+    let lastSprintNumber: undefined | number
     // @ts-expect-error
     return stations.flatMap((station, index, array) => {
-        const stationId = `${area}-station-${station.sprintId}`
+        const sprintId = station.sprintId
+        const sprint = sprints.get(station.sprintId)
+        const stationId: DataPrepared.StationId = `${area}-station-${sprintId}`
         const stationNode: ElementDefinition = {
             group: 'nodes',
             data: {
                 type: 'station',
+                line: area,
                 id: stationId,
+                sprintId,
+                sprintNumber: sprint?.number,
+                name: sprint?.number.toString() || sprint?.name || 'no-sprint',
                 issues: station.issues.map((issue) => {
                     const {changelog, comments, ...rest} = issue
                     return {...rest}
@@ -296,7 +304,7 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 assignedUsers: unique(station.issues.flatMap((issue) => issue.assignedUsersUnique ?? [])),
                 mentionedUsers: unique(station.issues.flatMap((issue) => issue.mentionedUsersUnique ?? [])),
                 areas: unique(station.issues.flatMap((issue) => issueMeta.get(issue.id)?.area ?? []))
-            },
+            } satisfies DataPrepared.Station,
         }
         const lineSegment: ElementDefinition | undefined = index > 0
             ? {
@@ -304,12 +312,16 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 data: {
                     type: 'segment',
                     area,
-                    id: `${area}-segment-${station.sprintId}`,
+                    id: `${area}-segment-${sprintId}`,
                     source: `${area}-station-${array[index - 1].sprintId}`,
                     target: stationId,
-                },
+                    distance: sprint?.number && lastSprintNumber
+                        ? sprint.number - lastSprintNumber
+                        : 0
+                } satisfies DataPrepared.LineSegment,
             }
             : undefined
+        lastSprintNumber = sprint?.number
         return [lineSegment, stationNode]
     }).filter(Boolean)
 }
@@ -340,7 +352,7 @@ function createTransportLines(): void {
         })
         .map<[area: string, ElementDefinition[]]>(([area, areaIssues]) => {
         // Group issues by sprint. An issue can occur in more than one stop.
-        const issuesBySprint = new Map<string, Data.Issue[]>()
+        const issuesBySprint = new Map<number, Data.Issue[]>()
         areaIssues.forEach((issue) => {
             const issueSprints = issue.sprints?.length
                 ? issue.sprints.map((sprintId) => {

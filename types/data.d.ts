@@ -5,16 +5,16 @@ declare namespace Data {
     //------------------
     export type User = Pick<DataRaw.User, 'key' | 'avatarUrls' | 'displayName' | 'name'>
 
-    export type UserFile = {
-        /** key is field `key` of user */
-        [key: string]: User[]
-    }
+    /** key is field `key` of user */
+    export type UserFile = Map<string, User>
 
     // Sprint
     //------------------
     export type Sprint = {
-        id: string
-        sequence: number
+        id: number
+        number: number
+        /** seems to be id of previous sprint */
+        previous: number
         name: string
         goal?: string
         state: string
@@ -24,19 +24,15 @@ declare namespace Data {
         completeDate?: string
     }
 
-    export type SprintFile = {
-        /** id is field `id` of Sprint */
-        [id: string]: Sprint[]
-    }
+    /** id is field `id` of Sprint */
+    export type SprintFile = Map<number, Sprint>
 
     // Components
     //------------------
     export type Component = Omit<DataRaw.ProjectComponent, 'self'>
 
-    export type ComponentFile = {
-        /** id is field `id` of Component */
-        [id: string]: Component[]
-    }
+    /** id is field `id` of Component */
+    export type ComponentFile = Map<string, Component>
 
     // IssueLink
     //------------------
@@ -48,6 +44,8 @@ declare namespace Data {
     }
 
     export type IssueLinkType = Omit<DataRaw.IssueLinkType, 'self'>
+    /** id is field `id` of IssueLink */
+    export type IssueLinkTypeFile = Map<string, IssueLinkType>
 
     export type IssueLink = {
         /** The ID of the issue link. */
@@ -58,10 +56,8 @@ declare namespace Data {
         type: string;
     }
 
-    export type IssueLinkFile = {
-        /** id is field `id` of IssueLink */
-        [id: string]: IssueLink[]
-    }
+    /** id is field `id` of IssueLink */
+    export type IssueLinkFile = Map<string, IssueLink>
 
     // Issue-Status
     //------------------
@@ -70,19 +66,15 @@ declare namespace Data {
         statusCategory: StatusCategory
     }
 
-    export type StatusFile = {
-        /** id is field `id` of Status */
-        [id: string]: Status[]
-    }
+    /** id is field `id` of Status */
+    export type StatusFile = Map<string, Status>
 
     // Issue-Type
     //------------------
     export type IssueType = Pick<DataRaw.IssueType, 'id' | 'name' | 'subtask'>
 
-    export type IssueTypeFile = {
-        /** id is field `id` of IssueType */
-        [id: string]: IssueType[]
-    }
+    /** id is field `id` of IssueType */
+    export type IssueTypeFile = Map<string, IssueType>
 
     // Issue
     //------------------
@@ -124,7 +116,7 @@ declare namespace Data {
         /** Story-Punkte (in float) */
         storypoints?: number
         /** Sprint */
-        sprints?: string[]
+        sprints?: number[]
         comments: Comment[]
         issuelinks: string[];
         /** The key of the user */
@@ -143,4 +135,7 @@ declare namespace Data {
         /** The keys of the users */
         assignedUsersUnique: string[]
     }
+
+    /** id is field `id` of Issue */
+    export type IssueFile = Map<string, Issue>
 }

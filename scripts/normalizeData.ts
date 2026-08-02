@@ -1,11 +1,9 @@
-import fs from 'node:fs'
+import type {DataAdditional} from '../types/data-additional.ts'
 import type {DataRaw} from '../types/data-raw.ts'
 import type {Data} from '../types/data.ts'
 import {
     getJsonFilesOfDirectory,
-    dataDir,
     readJsonFile,
-    writeArray,
     writeMap,
     readMap,
     additionalDataDir,
@@ -18,7 +16,7 @@ const MENTION_REGEX = /\[~([^\]]+)]/g
 const SPRINT_REGEX = /^com\.atlassian\.greenhopper\.service\.sprint\.Sprint@.+?\[activatedDate=(.*?),autoStartStop=(?:true|false),completeDate=(.*?),endDate=(.*?),goal=(.*?),id=(\d+),incompleteIssuesDestinationId=<null>,name=(.*?),rapidViewId=\d+,sequence=(\d+),startDate=(.*?),state=(.*?),synced=(?:true|false)\]$/
 
 const user = new Map<string, Data.User>()
-const sprints = new Map<string, Data.Sprint>()
+const sprints = new Map<number, Data.Sprint>()
 const components = new Map<string, Data.Component>()
 const issueLinkTypes = new Map<string, Data.IssueLinkType>()
 const links = new Map<string, Data.IssueLink>()
@@ -31,7 +29,7 @@ const subtasksMap = new Map<string, string>()
 const subtasksList = new Map<string, Data.Issue>()
 const subtasksLinks = new Map<string, Data.IssueLink>()
 
-const userMeta = readMap<UserMetaData>('userMeta.json', additionalDataDir)
+const userMeta = readMap<DataAdditional.UserMetaFile>('userMeta.json', additionalDataDir)
 const userReplacements = new Map<string, string>(
     userMeta.values()
         .filter((entry) => entry.combine && entry.combine.length > 1)
@@ -41,7 +39,8 @@ const userReplacements = new Map<string, string>(
         })
 )
 
-function processSprintString(sprintStrings: DataRaw.SprintString[] | null): string[] | undefined {
+const NUMBER_IN_SPRINT = /Sprint[^0-9]*([0-9]+)[^(]/i
+function processSprintString(sprintStrings: DataRaw.SprintString[] | null): number[] | undefined {
     if (!sprintStrings?.length) {
         return
     }
@@ -53,16 +52,19 @@ function processSprintString(sprintStrings: DataRaw.SprintString[] | null): stri
             throw new Error(`Invalid sprint string: ${rawSprint}`)
         }
 
-        const id = match[5] as string
+        const id = parseInt(match[5] as string)
+        const name = match[6] as string
+        const number = parseInt(name.match(NUMBER_IN_SPRINT)?.[1] as string)
 
         const sprint = {
             id,
+            name,
+            number,
+            previous: parseInt(match[7] as string),
+            goal: match[4] as string,
             activatedDate: match[1] as string,
             completeDate: match[2] as string,
             endDate: match[3] as string,
-            goal: match[4] as string,
-            name: match[6] as string,
-            sequence: Number(match[7]),
             startDate: match[8] as string,
             state: match[9] as string,
         }
@@ -401,12 +403,6 @@ function fixMentionedUsers() {
             comment.mentionedUsers = traverseUser(comment.mentionedUsers)
         })
     })
-}
-
-type UserMetaData = {
-    hide?: boolean
-    combine?: string[]
-    displayName?: string
 }
 
 function fixUser() {

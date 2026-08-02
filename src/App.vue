@@ -131,6 +131,7 @@ onMounted(async () => {
     // await updateEdges()
     updateLayout()
     cy.on('click', 'node', selectItem)
+    cy.on('click', 'edge', selectItem)
 })
 
 watch(layout, updateLayout)

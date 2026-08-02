@@ -7,12 +7,11 @@ export namespace DataAdditional {
         combine?: string[]
         /** whether the user should be ignored and can be safely removed/handeled as "non existing" */
         hide?: boolean
+        displayName?: string
     }
 
-    export type UserMetaFile = {
-        /** key is field `key` of user */
-        [key: string]: UserMeta[]
-    }
+    /** key is field `key` of user */
+    export type UserMetaFile = Map<string, UserMeta>
 
     export type IssueMeta = {
         /** ids of components */
@@ -24,10 +23,8 @@ export namespace DataAdditional {
         duplicateOf?: string
     }
 
-    export type IssueMetaFile = {
-        /** id is field `id` of issue */
-        [id: string]: IssueMeta[]
-    }
+    /** id is field `id` of issue */
+    export type IssueMetaFile = Map<string, IssueMeta>
 
     /**
      * PredictionMeta helps to find the area of the issue.
