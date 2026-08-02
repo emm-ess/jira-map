@@ -107,6 +107,7 @@ import {
 } from '../scripts/const.ts'
 import type {Data} from '../types/data'
 import {AVAILABLE_LINES, loadData} from './data.ts'
+import {createInvisibleForces, type StationNode} from './helperEdges.ts'
 import {LAYOUTS} from './layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
@@ -177,6 +178,10 @@ async function updateLines() {
         cy.edges().filter((element) => !stuffToKeep.has(element.data().id)),
     )
     cy.add(eles)
+    // @ts-expect-error
+    // const helperEdges = createInvisibleForces(cy.nodes().toArray() as StationNode[])
+    // console.log('---> helperEdges:', helperEdges)
+    // cy.add(helperEdges)
     updateLayout()
 }
 

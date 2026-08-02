@@ -1,6 +1,6 @@
 import type {FcoseLayoutOptions} from 'cytoscape-fcose'
 
-export const customLayout = {
+export const customFCose = {
     name: 'fcose',
 
     // 'draft', 'default' or 'proof'
@@ -46,9 +46,17 @@ export const customLayout = {
     // Node repulsion (non overlapping) multiplier
     nodeRepulsion: (node) => 4500,
     // Ideal edge (non nested) length
-    idealEdgeLength: (edge) => 50,
+    idealEdgeLength: (edge) => {
+        return edge.data('type') === 'layout-helper-force'
+            ? edge.data('force') * 20
+            : edge.data('distance') * 50 || 50
+    },
     // Divisor to compute edge forces
-    edgeElasticity: (edge) => 0.45,
+    edgeElasticity: (edge) => {
+        return edge.data('type') === 'layout-helper-force'
+            ? 0.95
+            : 0.45
+    },
     // Nesting factor (multiplier) to compute ideal edge length for nested edges
     nestingFactor: 0.1,
     // Maximum number of iterations to perform - this is a suggested value and might be adjusted by the algorithm as required
@@ -93,3 +101,34 @@ export const customLayout = {
     ready: () => {}, // on layoutready
     stop: () => {}, // on layoutstop
 } satisfies FcoseLayoutOptions
+
+export const customElk = {
+    name: 'elk',
+    nodeDimensionsIncludeLabels: false, // Boolean which changes whether label dimensions are included when calculating node dimensions
+    fit: true, // Whether to fit
+    padding: 20, // Padding on fit
+    animate: false, // Whether to transition the node positions
+    animateFilter: function(node, i) { return true }, // Whether to animate specific nodes when animation is on; non-animated nodes immediately go to their final positions
+    animationDuration: 500, // Duration of animation in ms if enabled
+    animationEasing: undefined, // Easing of animation if enabled
+    transform: function(node, pos) { return pos }, // A function that applies a transform to the final node position
+    ready: undefined, // Callback on layoutready
+    stop: undefined, // Callback on layoutstop
+    nodeLayoutOptions: undefined, // Per-node options function
+    elk: {
+        // All options are available at http://www.eclipse.org/elk/reference.html
+        //
+        // 'org.eclipse.' can be dropped from the identifier. The subsequent identifier has to be used as property key in quotes.
+        // E.g. for 'org.eclipse.elk.direction' use:
+        // 'elk.direction'
+        //
+        // Enums use the name of the enum as string e.g. instead of Direction.DOWN use:
+        // 'elk.direction': 'DOWN'
+        //
+        // The main field to set is `algorithm`, which controls which particular layout algorithm is used.
+        // Example (downwards layered layout):
+        algorithm: 'disco',
+        'elk.direction': 'DOWN',
+    },
+    priority: function(edge) { return null }, // Edges with a non-nil value are skipped when geedy edge cycle breaking is enabled
+}

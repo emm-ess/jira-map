@@ -10,6 +10,11 @@ export const cytoscopeStyle = [{
         'border-color': '#111',
     },
 }, {
+    selector: 'edge[type="layout-helper-force"]',
+    style: {
+        visibility: 'hidden',
+    },
+}, {
     selector: `node[type="${NODE_TYPE.USER}"]`,
     style: {
         label: 'data(displayName)',

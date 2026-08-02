@@ -2,6 +2,7 @@ import type {ElementDefinition} from 'cytoscape'
 import type {DataAdditional} from '../types/data-additional.d.ts'
 import type {DataPrepared} from '../types/data-prepared.ts'
 import type {Data} from '../types/data.ts'
+import {AreaGraph} from '../src/areaGraph.ts'
 import {AVAILABLE_EDGES, AVAILABLE_NODE_TYPES, EDGE_TYPE, NODE_TYPE} from './const.ts'
 import type {CommentMentions} from './evaluateData.ts'
 import {additionalDataDir, dataDir, readJsonFile, readMap, simplifiedDataDir, unique, writeArray} from './util.ts'
@@ -29,45 +30,6 @@ function applyMetaData(): void {
 /* ****************+
  * HElPER
  *******************/
-// provide a graph for traversing data
-class AreaGraph {
-    // data consist of key -> parentKeys[]
-    data = readMap<Map<string, string[]>>('areaMeta.json', additionalDataDir)
-
-    getRootNodes(keys: string[]): string[] {
-        return [...new Set(keys.flatMap((key) => this.getRootNode(key)))]
-    }
-
-    getRootNode(key: string): string[] {
-        const getRoots = (currentKey: string, path: Set<string>): string[] => {
-            if (path.has(currentKey)) {
-                return [currentKey]
-            }
-
-            const parentKeys = this.getParentNodes(currentKey) ?? []
-            if (parentKeys.length === 0) {
-                return [currentKey]
-            }
-
-            const nextPath = new Set(path).add(currentKey)
-            return unique(parentKeys.flatMap((parentKey) => getRoots(parentKey, nextPath)))
-        }
-
-        return getRoots(key, new Set())
-    }
-
-    getParentNodes(key: string): string[] | void {
-        return this.data.get(key)
-    }
-
-    // seems faulty
-    // getChildren(key: string): string[] {
-    //     return this.data.entries()
-    //         .filter(([, parentKeys]) => parentKeys.includes(key))
-    //         .map(([childKey]) => childKey)
-    //         .toArray()
-    // }
-}
 
 function issueToNode(issue: Data.Issue): ElementDefinition {
     return {

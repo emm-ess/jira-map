@@ -1,4 +1,4 @@
-import {customLayout} from './customLayout'
+import {customElk, customFCose} from './customLayout'
 
 const random = {
     name: 'random',
@@ -530,7 +530,8 @@ const euler = {
 }
 
 export const LAYOUTS = [
-    {name: 'customLayout', layout: customLayout},
+    {name: 'custom elk', layout: customElk},
+    {name: 'customLayout', layout: customFCose},
     ...[random, preset, grid, circle, concentric, breadthfirst, cose, fcose, cola, dagre, elk, euler]
         .map((layout) => ({name: layout.name, layout})),
 ]
