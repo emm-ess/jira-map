@@ -1,5 +1,6 @@
 import type {ElementDefinition} from 'cytoscape'
 
+import * as intersectionsRecord from '../data-simplified/intersections.json'
 import * as lines from '../data-simplified/lines.json'
 
 const cache = new Map<string, ElementDefinition[]>()
@@ -13,6 +14,8 @@ type Line = {
     name: string
     filename: string
 }
+
+export const intersections = intersectionsRecord.default
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
 export const AVAILABLE_LINES = lines.default.map<Line>((line: string) => ({

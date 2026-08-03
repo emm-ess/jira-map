@@ -106,8 +106,7 @@ import {
     type NodeSelection,
 } from '../scripts/const.ts'
 import type {Data} from '../types/data'
-import {AVAILABLE_LINES, loadData} from './data.ts'
-import {createInvisibleForces, type StationNode} from './helperEdges.ts'
+import {AVAILABLE_LINES, intersections, loadData} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
@@ -127,12 +126,14 @@ onMounted(async () => {
         container: cyEle.value,
         style: cytoscopeStyle,
     })
+    // cy.add(intersections)
     await updateLines()
     // await updateNodes()
     // await updateEdges()
     updateLayout()
     cy.on('click', 'node', selectItem)
     cy.on('click', 'edge', selectItem)
+    console.log('cy', cy)
 })
 
 watch(layout, updateLayout)
@@ -169,15 +170,29 @@ watch(selectedEdges, updateEdges, {deep: true})
 async function updateLines() {
     // eslint-disable-next-line compat/compat
     const data = await Promise.all(selectedLines.value.map((nodeType) => loadData(nodeType.filename)))
+    const lines = new Set(selectedLines.value.map((line) => line.name))
     const eles = data.flat()
     const stuffToKeep = new Set(eles.map((ele) => ele.data.id))
+    const filteredIntersectionNodes = intersections.filter((ele) =>
+        ele.data.lines.filter((line) => lines.has(line)).length > 1)
     cy.remove(
-        cy.nodes().filter((element) => !stuffToKeep.has(element.data().id)),
+        cy.nodes().filter((element) => {
+            const data = element.data()
+            return !(stuffToKeep.has(data.id)
+                || (data.type === 'intersection' && filteredIntersectionNodes.some((node) => node.data.id === data.id)))
+        }),
     )
     cy.remove(
         cy.edges().filter((element) => !stuffToKeep.has(element.data().id)),
     )
+    cy.add(filteredIntersectionNodes)
     cy.add(eles)
+    for (const ele of filteredIntersectionNodes) {
+        const children = ele.data.children.flatMap((childId) => cy.nodes(`[id="${childId}"]`))
+        for (const child of children) {
+            child.move({parent: ele.data.id})
+        }
+    }
     // @ts-expect-error
     // const helperEdges = createInvisibleForces(cy.nodes().toArray() as StationNode[])
     // console.log('---> helperEdges:', helperEdges)

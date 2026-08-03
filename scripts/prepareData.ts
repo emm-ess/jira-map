@@ -31,23 +31,37 @@ function applyMetaData(): void {
  * HElPER
  *******************/
 
+function simplifyIssue(issue: Data.Issue) {
+    return {
+        id: issue.id,
+        key: issue.key,
+        issueType: issueTypes.get(issue.issuetype)?.name,
+        summary: issue.summary,
+        status: issue.status,
+        sprints: issue.sprints,
+        area: issueMeta.get(issue.id)?.area,
+        components: issueMeta.get(issue.id)?.components || issue.components,
+        assignedUsers: issue.assignedUsers,
+        mentionedUsers: issue.mentionedUsers,
+    }
+}
+
 function issueToNode(issue: Data.Issue): ElementDefinition {
     return {
         group: 'nodes',
         data: {
+            ...simplifyIssue(issue),
             type: NODE_TYPE.ISSUE,
-            id: issue.id,
-            key: issue.key,
-            issueType: issueTypes.get(issue.issuetype)?.name,
-            summary: issue.summary,
-            status: issue.status,
-            sprints: issue.sprints,
-            area: issueMeta.get(issue.id)?.area,
-            components: issueMeta.get(issue.id)?.components || issue.components,
-            assignedUsers: issue.assignedUsers,
-            mentionedUsers: issue.mentionedUsers,
         }
     }
+}
+
+function normalizeFilename(name: string): string {
+    return name.toLowerCase()
+        .replaceAll(' ', '-')
+        .replaceAll('ä', 'ae')
+        .replaceAll('ö', 'oe')
+        .replaceAll('ü', 'ue')
 }
 
 /* ****************+
@@ -242,6 +256,8 @@ type Station = {
     issues: Data.Issue[]
 }
 
+type Lines = Map<string, ElementDefinition[]>
+
 function buildLine(area: string, stations: Station[]): ElementDefinition[] {
     let lastSprintNumber: undefined | number
     // @ts-expect-error
@@ -288,7 +304,7 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
     }).filter(Boolean)
 }
 
-function createTransportLines(): void {
+function createTransportLines(): Lines {
     const areaGraph = new AreaGraph()
     const transportGroups = new Map<string, Data.Issue[]>()
 
@@ -304,7 +320,7 @@ function createTransportLines(): void {
             })
         })
 
-    const lines = transportGroups.entries()
+    return new Map(transportGroups.entries()
         .filter(([area, areaIssues]) => {
             const multipleSprints = unique(areaIssues.flatMap((issue) => issue.sprints ?? [])).length > 1
             if (!multipleSprints) {
@@ -345,23 +361,93 @@ function createTransportLines(): void {
 
         const stations = sprintIds.map((sprintId) => ({sprintId, issues: issuesBySprint.get(sprintId) ?? []}))
         return [normalizeFilename(area), buildLine(area, stations)]
-    }).toArray()
+    }))
+}
+
+type IntersectionEntry = {
+    lines: Set<string>
+    nodes: Set<ElementDefinition>
+    issues: Set<Data.Issue>
+}
+
+function calculateIntersections(lines: Lines): Map<string, IntersectionEntry> {
+    const linesCopy = new Map(lines)
+    const intersections = new Map<string, IntersectionEntry>()
+    for (const [area, line] of linesCopy) {
+        linesCopy.delete(area)
+        const nodes = line.filter((element) => element.group === 'nodes')
+        for (const node of nodes) {
+            for (const [otherArea, otherLine] of linesCopy) {
+                const otherNodes = otherLine.filter((element) => element.group === 'nodes')
+                for (const otherNode of otherNodes) {
+                    const issueIds = unique((node.data.issues ?? []).map((issue: Data.Issue) => issue.id))
+                    const otherIssueIds = new Set(
+                        unique((otherNode.data.issues ?? []).map((issue: Data.Issue) => issue.id)),
+                    )
+                    const commonIssueIds = issueIds
+                        .filter((issueId) => otherIssueIds.has(issueId))
+                        .sort((a, b) => a.localeCompare(b))
+
+                    if (commonIssueIds.length === 0) {
+                        continue
+                    }
+
+                    const intersectionKey = commonIssueIds.join(',')
+                    const intersection = intersections.get(intersectionKey) ?? {lines: new Set(), nodes: new Set(), issues: new Set()}
+                    intersection.lines.add(area)
+                    intersection.lines.add(otherArea)
+                    intersection.nodes.add(node)
+                    intersection.nodes.add(otherNode)
+                    commonIssueIds.forEach((issue) => intersection.issues.add(issue))
+                    intersections.set(intersectionKey, intersection)
+                }
+            }
+        }
+    }
+
+    // - ignore non-sprint-tickets ?
+    // - deal with: a node aka "station" can only have one! parent, but we have multiple issues per "station"
+    //   which leads to the existence of multiple intersections for one node. options:
+    //   -- combine these into one big intersection? -> might trigger snowballing
+    //   -- find "main" intersection? maybe... keep as much "stations" as possible together -> finding an algorithm
+    //      might be hard
+
+    return intersections
+}
+
+function createNetwork(): void {
+    const lines = createTransportLines()
+
+    const intersections = calculateIntersections(lines)
+
+    const intersectionNodes: ElementDefinition[] = []
+    for (const [id, entry] of intersections.entries()) {
+        const nodeId = `intersection-${id}`
+        intersectionNodes.push({
+            group: 'nodes',
+            data: {
+                id: nodeId,
+                type: 'intersection',
+                lines: entry.lines.values().toArray(),
+                issues: entry.issues.values()
+                    .map((id) => simplifyIssue(issues.get(id)))
+                    .toArray(),
+                children: entry.nodes.values().map((node) => node.data.id).toArray(),
+            }
+        })
+        for (const node of entry.nodes.values()) {
+            node.data.parent = nodeId
+        }
+    }
+    writeArray(intersectionNodes, 'intersections', simplifiedDataDir)
 
     for (const [area, elements] of lines) {
         writeArray(elements, `lines/${area}`, simplifiedDataDir)
     }
-    const areasWithLines = lines
+    const areasWithLines = lines.entries().toArray()
         .map((line) => line[0])
         .sort((a, b) => a.localeCompare(b))
     writeArray(areasWithLines, 'lines', simplifiedDataDir)
-}
-
-function normalizeFilename(name: string): string {
-    return name.toLowerCase()
-        .replaceAll(' ', '-')
-        .replaceAll('ä', 'ae')
-        .replaceAll('ö', 'oe')
-        .replaceAll('ü', 'ue')
 }
 
 function prepareData(): void {
@@ -381,6 +467,6 @@ function prepareData(): void {
     prepareIssueLinks()
 
     // Transport lines
-    createTransportLines()
+    createNetwork()
 }
 prepareData()
