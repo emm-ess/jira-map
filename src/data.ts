@@ -11,19 +11,9 @@ const modules = import.meta.glob(
     {import: 'default'},
 )
 
-type Line = {
-    name: string
-    filename: string
-}
-
 export const intersections = intersectionsRecord.default
 export const user = userFile.default
-
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
-export const AVAILABLE_LINES = lines.default.map<Line>((line: string) => ({
-    name: line,
-    filename: `lines/${line}`,
-}))
+export const AVAILABLE_LINES = lines.default
 
 export async function loadData(file: string): Promise<ElementDefinition[]> {
     if (cache.has(file)) {

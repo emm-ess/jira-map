@@ -361,7 +361,7 @@ function createTransportLines(): Lines {
         })
 
         const stations = sprintIds.map((sprintId) => ({sprintId, issues: issuesBySprint.get(sprintId) ?? []}))
-        return [normalizeFilename(area), buildLine(area, stations)]
+        return [area, buildLine(area, stations)]
     }))
 }
 
@@ -443,11 +443,20 @@ function createNetwork(): void {
     writeArray(intersectionNodes, 'intersections', simplifiedDataDir)
 
     for (const [area, elements] of lines) {
-        writeArray(elements, `lines/${area}`, simplifiedDataDir)
+        writeArray(elements, `lines/${normalizeFilename(area)}`, simplifiedDataDir)
     }
     const areasWithLines = lines.entries().toArray()
         .map((line) => line[0])
         .sort((a, b) => a.localeCompare(b))
+        .map((line) => {
+            const hue = Math.floor(Math.random() * 360)
+            return {
+                name: line,
+                filename: `lines/${normalizeFilename(line)}`,
+                colorNormal: `hsl(${hue}, 100%, 50%)`,
+                colorUnused: `hsl(${hue}, 70%, 85%)`,
+            }
+        })
     writeArray(areasWithLines, 'lines', simplifiedDataDir)
 }
 

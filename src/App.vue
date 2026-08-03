@@ -222,14 +222,26 @@ async function updateLines() {
 function updateUser() {
     // just take both things. better be safe than sorry.
     const userIdentifier = new Set(selectedUser.value.flatMap((user) => [user.name, user.key]))
-    for (const node of cy.nodes('[type="station"]')) {
-        if (node.data('assignedUsers').some((assignedUser) =>
-            userIdentifier.has(assignedUser),
-        )) {
-            node.style('background-color', 'lightblue')
+    const stationNodes = cy.nodes('[type="station"]')
+    const assignedStationNodes = stationNodes.filter((node) => {
+        return node.data('assignedUsers').some((assignedUser) => userIdentifier.has(assignedUser))
+    })
+    const filtered = selectedUser.value.length
+    for (const node of stationNodes) {
+        if (filtered && !assignedStationNodes.contains(node)) {
+            node.addClass('unused')
         }
         else {
-            node.style('background-color', 'lightgray')
+            node.removeClass('unused')
+        }
+    }
+    for (const edge of cy.edges('[type="segment"]')) {
+        if (filtered && (!assignedStationNodes.contains(edge.source())
+            || !assignedStationNodes.contains(edge.target()))) {
+            edge.addClass('unused')
+        }
+        else {
+            edge.removeClass('unused')
         }
     }
 }
