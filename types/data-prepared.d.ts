@@ -6,6 +6,7 @@ export namespace DataPrepared {
 
     export type Station = {
         type: 'station'
+        future: boolean
         line: string
         id: StationId
         sprintId: number
@@ -20,6 +21,7 @@ export namespace DataPrepared {
 
     export type LineSegment = {
         type: 'segment'
+        future: boolean
         area: string
         id: LineId
         source: StationId

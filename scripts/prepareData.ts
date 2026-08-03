@@ -266,10 +266,13 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
         const sprintId = station.sprintId
         const sprint = sprints.get(station.sprintId)
         const stationId: DataPrepared.StationId = `${area}-station-${sprintId}`
+        const future = station.sprintId === noYetDoneSprint
+
         const stationNode: ElementDefinition = {
             group: 'nodes',
             data: {
                 type: 'station',
+                future,
                 line: area,
                 id: stationId,
                 sprintId,
@@ -290,6 +293,7 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 group: 'edges',
                 data: {
                     type: 'segment',
+                    future,
                     area,
                     id: `${area}-segment-${sprintId}`,
                     source: `${area}-station-${array[index - 1].sprintId}`,
@@ -378,9 +382,19 @@ function calculateIntersections(lines: Lines): Map<string, IntersectionEntry> {
         linesCopy.delete(area)
         const nodes = line.filter((element) => element.group === 'nodes')
         for (const node of nodes) {
+            // skip future for now
+            if (node.data.future) {
+                continue
+            }
+
             for (const [otherArea, otherLine] of linesCopy) {
                 const otherNodes = otherLine.filter((element) => element.group === 'nodes')
                 for (const otherNode of otherNodes) {
+                    // skip future for now (for safety also here)
+                    if (otherNode.data.future) {
+                        continue
+                    }
+
                     const issueIds = unique((node.data.issues ?? []).map((issue: Data.Issue) => issue.id))
                     const otherIssueIds = new Set(
                         unique((otherNode.data.issues ?? []).map((issue: Data.Issue) => issue.id)),

@@ -17,6 +17,11 @@ const linesStyles = [
             // 'line-outline-width': 2,
             // 'line-outline-color': '#ffffff',
         },
+    }, {
+        selector: 'edge[type="segment"][?future]',
+        style: {
+            'line-style': 'dashed',
+        },
     },
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     ...AVAILABLE_LINES.flatMap<CytoscapeOptions['style'][]>((line) => [{
