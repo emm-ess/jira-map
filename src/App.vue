@@ -106,12 +106,14 @@
 
 <script lang="ts" setup>
 import cytoscape, {type ElementDefinition, type EventObject} from 'cytoscape'
+import type {FcoseLayoutOptions} from 'cytoscape-fcose'
 import {onMounted, ref, useTemplateRef, watch} from 'vue'
 
 import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
 import FormFieldset from '@/components/FormFieldset.vue'
 import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
+import {getIntersectionRestrictions, moveStationsAccordingToRestrictions} from '@/layoutHelper.ts'
 import {randomSelection} from '@/misc.ts'
 
 import {
@@ -128,8 +130,8 @@ import {LAYOUTS} from './layouts.ts'
 const cyEle = useTemplateRef('cyEle')
 const dialog = useTemplateRef('dialog')
 
-const layout = ref(LAYOUTS[0])
-const selectedLines = ref(randomSelection(AVAILABLE_LINES, 5))
+const layout = ref(LAYOUTS[2])
+const selectedLines = ref([AVAILABLE_LINES[8], AVAILABLE_LINES[13]])
 const selectedUser = ref<string[]>([])
 const selectedNodes = ref<NodeSelection[]>([]) // [AVAILABLE_NODE_TYPES.USER])
 const selectedEdges = ref<EdgeSelection[]>([]) // [AVAILABLE_EDGES.MENTION_PER_USER])
@@ -160,12 +162,28 @@ function restIssueFields(issue: Data.Issue): string {
     return JSON.stringify(rest, null, 2)
 }
 
-function updateLayout() {
+async function updateLayout() {
     cy.clearQueue()
+    const layoutFinished = cy.promiseOn('layoutstop')
+    console.log('starting')
     cy.layout(layout.value.layout).run()
+    console.log('running')
+    await layoutFinished
+    console.log('finished')
+    if (layout.value.name === 'hopefully mappy') {
+        const restrictions = getIntersectionRestrictions(cy.nodes('[type="intersection"]'))
+        console.log('rest', restrictions)
+        moveStationsAccordingToRestrictions(cy, restrictions.relativeConstrains)
+        cy.layout({
+            ...layout.value.layout,
+            randomize: false,
+            ...restrictions,
+        } as FcoseLayoutOptions).run()
+    }
 }
 
 function selectItem(element: EventObject): void {
+    console.log('selectItem', element.target.position())
     selectedItem.value = element.target.data()
     dialog.value?.showPopover()
 }
@@ -280,6 +298,7 @@ main
 
 #cy
     flex: 1 1 auto
+    aspect-ratio: 5 / 4
 
 form
     display: flex

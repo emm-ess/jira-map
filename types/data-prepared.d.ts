@@ -22,7 +22,7 @@ export namespace DataPrepared {
     export type LineSegment = {
         type: 'segment'
         future: boolean
-        area: string
+        line: string
         id: LineId
         source: StationId
         target: StationId

@@ -294,7 +294,7 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 data: {
                     type: 'segment',
                     future,
-                    area,
+                    line: area,
                     id: `${area}-segment-${sprintId}`,
                     source: `${area}-station-${array[index - 1].sprintId}`,
                     target: stationId,

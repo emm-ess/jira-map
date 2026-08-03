@@ -6,11 +6,13 @@ import dagre from 'cytoscape-dagre'
 import elk from 'cytoscape-elk'
 import euler from 'cytoscape-euler'
 import fcose from 'cytoscape-fcose'
+import layoutUtilities from 'cytoscape-layout-utilities'
 import svg from 'cytoscape-svg'
 import {createApp} from 'vue'
 
 import App from './App.vue'
 
+cytoscape.use(layoutUtilities)
 cytoscape.use(cola)
 cytoscape.use(dagre)
 cytoscape.use(elk)

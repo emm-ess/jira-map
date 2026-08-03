@@ -12,6 +12,12 @@ const linesStyles = [
             // @see https://js.cytoscape.org/demos/edge-types/
             // 'curve-style': 'round-segments',
             'curve-style': 'round-taxi',
+            // 'taxi-turn': '50%',
+            'taxi-turn-min-distance': '16px',
+
+            'edge-distances': 'node-position',
+            'source-endpoint': 'inside-to-node',
+            'target-endpoint': 'inside-to-node',
 
             // 'line-fill': 'linear-gradient',
             // 'line-outline-width': 2,
@@ -34,6 +40,16 @@ const linesStyles = [
         style: {
             'line-color': line.colorUnused,
         },
+    }, {
+        selector: `node[type="station"][line="${line.name}"]`,
+        style: {
+            'outline-color': line.colorNormal,
+        },
+    }, {
+        selector: `node[type="station"][line="${line.name}"].unused`,
+        style: {
+            'outline-color': line.colorUnused,
+        },
     }]),
 ] as const satisfies CytoscapeOptions['style'][]
 
@@ -41,15 +57,22 @@ export const cytoscopeStyle = [{
     selector: 'node[type="station"]',
     style: {
         label: 'data(name)',
+        width: 8,
+        height: 8,
         'background-color': '#fff',
-        'border-color': '#111',
-        'border-width': 3,
+        // 'border-position': 'outside',
+        'border-width': 0,
+        'outline-width': 3,
     },
 }, {
     selector: 'node[type="intersection"]',
     style: {
         shape: 'round-rectangle',
+        padding: 0,
         'background-color': '#fff',
+        'outline-width': 2,
+        'outline-color': '#111',
+        'compound-sizing-wrt-labels': 'exclude',
     },
 }, {
     selector: 'edge[type="layout-helper-force"]',

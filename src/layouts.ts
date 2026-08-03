@@ -531,7 +531,7 @@ const euler = {
 
 export const LAYOUTS = [
     {name: 'custom elk', layout: customElk},
-    {name: 'customLayout', layout: customFCose},
+    {name: 'hopefully mappy', layout: customFCose},
     ...[random, preset, grid, circle, concentric, breadthfirst, cose, fcose, cola, dagre, elk, euler]
         .map((layout) => ({name: layout.name, layout})),
 ]
