@@ -83,6 +83,7 @@ function prepareUsers(): void {
         } as const satisfies UserData,
     })).toArray()
     writeArray(usersForCytoscape, AVAILABLE_NODE_TYPES.USER.filename, simplifiedDataDir)
+    writeArray(users.values().toArray(), 'user', simplifiedDataDir)
 }
 
 function prepareComponents(): void {

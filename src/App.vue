@@ -11,51 +11,66 @@
                 Layout
             </base-select>
 
-            <fieldset>
-                <legend>"Lines"</legend>
-                <div class="scrollwrapper">
-                    <base-checkbox
-                        v-for="line in AVAILABLE_LINES"
-                        :id="line.name"
-                        :key="line.name"
-                        v-model="selectedLines"
-                        :value="line"
-                    >
-                        {{ line.name }}
-                    </base-checkbox>
-                </div>
-            </fieldset>
+            <form-fieldset>
+                <template #summary>
+                    "Lines"
+                </template>
+                <base-checkbox
+                    v-for="line in AVAILABLE_LINES"
+                    :id="line.name"
+                    :key="line.name"
+                    v-model="selectedLines"
+                    :value="line"
+                >
+                    {{ line.name }}
+                </base-checkbox>
+            </form-fieldset>
 
-            <fieldset>
-                <legend>Nodes</legend>
-                <div class="scrollwrapper">
-                    <base-checkbox
-                        v-for="nodeType in Object.values(AVAILABLE_NODE_TYPES)"
-                        :id="nodeType.type"
-                        :key="nodeType.type"
-                        v-model="selectedNodes"
-                        :value="nodeType"
-                    >
-                        {{ nodeType.name }}
-                    </base-checkbox>
-                </div>
-            </fieldset>
+            <form-fieldset>
+                <template #summary>
+                    Humans
+                </template>
+                <base-checkbox
+                    v-for="human in user"
+                    :id="human.name"
+                    :key="human.name"
+                    v-model="selectedUser"
+                    :value="human"
+                >
+                    {{ human.displayName }}
+                </base-checkbox>
+            </form-fieldset>
 
-            <fieldset>
-                <legend>Edges</legend>
-                <div class="scrollwrapper">
-                    <base-checkbox
-                        v-for="edgeType in Object.values(AVAILABLE_EDGES)"
-                        :id="edgeType.type"
-                        :key="edgeType.type"
-                        v-model="selectedEdges"
-                        :value="edgeType"
-                        :disabled="!isEdgePossible(edgeType)"
-                    >
-                        {{ edgeType.name }}
-                    </base-checkbox>
-                </div>
-            </fieldset>
+            <form-fieldset>
+                <template #summary>
+                    Nodes
+                </template>
+                <base-checkbox
+                    v-for="nodeType in Object.values(AVAILABLE_NODE_TYPES)"
+                    :id="nodeType.type"
+                    :key="nodeType.type"
+                    v-model="selectedNodes"
+                    :value="nodeType"
+                >
+                    {{ nodeType.name }}
+                </base-checkbox>
+            </form-fieldset>
+
+            <form-fieldset>
+                <template #summary>
+                    Edges
+                </template>
+                <base-checkbox
+                    v-for="edgeType in Object.values(AVAILABLE_EDGES)"
+                    :id="edgeType.type"
+                    :key="edgeType.type"
+                    v-model="selectedEdges"
+                    :value="edgeType"
+                    :disabled="!isEdgePossible(edgeType)"
+                >
+                    {{ edgeType.name }}
+                </base-checkbox>
+            </form-fieldset>
         </form>
     </main>
 
@@ -95,6 +110,7 @@ import {onMounted, ref, useTemplateRef, watch} from 'vue'
 
 import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
+import FormFieldset from '@/components/FormFieldset.vue'
 import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
 import {randomSelection} from '@/misc.ts'
 
@@ -106,7 +122,7 @@ import {
     type NodeSelection,
 } from '../scripts/const.ts'
 import type {Data} from '../types/data'
-import {AVAILABLE_LINES, intersections, loadData} from './data.ts'
+import {AVAILABLE_LINES, intersections, loadData, user} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
@@ -114,6 +130,7 @@ const dialog = useTemplateRef('dialog')
 
 const layout = ref(LAYOUTS[0])
 const selectedLines = ref(randomSelection(AVAILABLE_LINES, 5))
+const selectedUser = ref<string[]>([])
 const selectedNodes = ref<NodeSelection[]>([]) // [AVAILABLE_NODE_TYPES.USER])
 const selectedEdges = ref<EdgeSelection[]>([]) // [AVAILABLE_EDGES.MENTION_PER_USER])
 
@@ -164,6 +181,7 @@ function cleanEdges(edgeTypeToKeep: Set<EdgeType>): void {
 }
 
 watch(selectedLines, updateLines, {deep: true})
+watch(selectedUser, updateUser, {deep: true})
 watch(selectedNodes, updateNodes, {deep: true})
 watch(selectedEdges, updateEdges, {deep: true})
 
@@ -197,7 +215,23 @@ async function updateLines() {
     // const helperEdges = createInvisibleForces(cy.nodes().toArray() as StationNode[])
     // console.log('---> helperEdges:', helperEdges)
     // cy.add(helperEdges)
+    updateUser()
     updateLayout()
+}
+
+function updateUser() {
+    // just take both things. better be safe than sorry.
+    const userIdentifier = new Set(selectedUser.value.flatMap((user) => [user.name, user.key]))
+    for (const node of cy.nodes('[type="station"]')) {
+        if (node.data('assignedUsers').some((assignedUser) =>
+            userIdentifier.has(assignedUser),
+        )) {
+            node.style('background-color', 'lightblue')
+        }
+        else {
+            node.style('background-color', 'lightgray')
+        }
+    }
 }
 
 async function updateNodes() {
@@ -242,15 +276,6 @@ form
     padding: 16px
     width: 12.25%
     height: 100%
-
-fieldset
-    flex: 1 1 auto
-    overflow: auto
-
-.scrollwrapper
-    display: flex
-    flex-direction: column
-    gap: 8px
 
 dialog
     max-width: 80%
