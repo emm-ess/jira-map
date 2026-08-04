@@ -3,6 +3,9 @@ import type {CytoscapeOptions} from 'cytoscape'
 import {EDGE_TYPE, NODE_TYPE} from '../scripts/const.ts'
 import {AVAILABLE_LINES} from './data.ts'
 
+// gray active #727782
+// gray unused #EDEEF0
+
 const linesStyles = [
     {
         selector: 'edge[type="segment"]',
@@ -10,8 +13,9 @@ const linesStyles = [
             width: 8,
             'line-style': 'solid',
             // @see https://js.cytoscape.org/demos/edge-types/
+            'curve-style': 'bezier',
             // 'curve-style': 'round-segments',
-            'curve-style': 'round-taxi',
+            // 'curve-style': 'round-taxi',
             // 'taxi-turn': '50%',
             'taxi-turn-min-distance': '16px',
 
@@ -71,8 +75,13 @@ export const cytoscopeStyle = [{
         padding: 0,
         'background-color': '#fff',
         'outline-width': 2,
-        'outline-color': '#111',
+        'outline-color': '#727782',
         'compound-sizing-wrt-labels': 'exclude',
+    },
+}, {
+    selector: 'node[type="intersection"]:childless',
+    style: {
+        display: 'none',
     },
 }, {
     selector: 'edge[type="layout-helper-force"]',

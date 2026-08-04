@@ -2,7 +2,7 @@
     <main>
         <div id="cy" ref="cyEle" />
 
-        <form>
+        <form @submit.prevent>
             <base-select
                 id="layout"
                 v-model="layout"
@@ -41,80 +41,67 @@
                 </base-checkbox>
             </form-fieldset>
 
-            <form-fieldset>
-                <template #summary>
-                    Nodes
-                </template>
-                <base-checkbox
-                    v-for="nodeType in Object.values(AVAILABLE_NODE_TYPES)"
-                    :id="nodeType.type"
-                    :key="nodeType.type"
-                    v-model="selectedNodes"
-                    :value="nodeType"
-                >
-                    {{ nodeType.name }}
-                </base-checkbox>
-            </form-fieldset>
+            <details>
+                <summary>"Raw"-Data</summary>
+                <form-fieldset>
+                    <template #summary>
+                        Nodes
+                    </template>
+                    <base-checkbox
+                        v-for="nodeType in Object.values(AVAILABLE_NODE_TYPES)"
+                        :id="nodeType.type"
+                        :key="nodeType.type"
+                        v-model="selectedNodes"
+                        :value="nodeType"
+                    >
+                        {{ nodeType.name }}
+                    </base-checkbox>
+                </form-fieldset>
 
-            <form-fieldset>
-                <template #summary>
-                    Edges
-                </template>
-                <base-checkbox
-                    v-for="edgeType in Object.values(AVAILABLE_EDGES)"
-                    :id="edgeType.type"
-                    :key="edgeType.type"
-                    v-model="selectedEdges"
-                    :value="edgeType"
-                    :disabled="!isEdgePossible(edgeType)"
-                >
-                    {{ edgeType.name }}
-                </base-checkbox>
-            </form-fieldset>
+                <form-fieldset>
+                    <template #summary>
+                        Edges
+                    </template>
+                    <base-checkbox
+                        v-for="edgeType in Object.values(AVAILABLE_EDGES)"
+                        :id="edgeType.type"
+                        :key="edgeType.type"
+                        v-model="selectedEdges"
+                        :value="edgeType"
+                        :disabled="!isEdgePossible(edgeType)"
+                    >
+                        {{ edgeType.name }}
+                    </base-checkbox>
+                </form-fieldset>
+            </details>
+
+            <button type="button" @click="exportImage">
+                Export PNG
+            </button>
+            <button type="button" @click="exportSvg">
+                Export SVG
+            </button>
+            <button type="button" @click="exportJson">
+                Export JSON
+            </button>
         </form>
     </main>
 
-    <dialog
-        ref="dialog"
-        class="selected-item"
-        popover
-    >
-        <dl v-if="selectedItem">
-            <template
-                v-for="[key, value] in Object.entries(selectedItem)"
-                :key="key"
-            >
-                <dt>{{ key }}</dt>
-                <dd>
-                    <template v-if="key === 'issues'">
-                        <article v-for="issue in value" :key="issue.key">
-                            <h1>{{ issue.key }}: {{ issue.summary }}</h1>
-                            <pre>
-                                {{ issue.description }}
-                            </pre>
-                            <pre>{{ restIssueFields(issue) }}</pre>
-                        </article>
-                    </template>
-                    <template v-else>
-                        {{ value }}
-                    </template>
-                </dd>
-            </template>
-        </dl>
-    </dialog>
+    <element-dialog ref="dialog" />
 </template>
 
 <script lang="ts" setup>
-import cytoscape, {type ElementDefinition, type EventObject} from 'cytoscape'
+import cytoscape, {type EventObject} from 'cytoscape'
 import type {FcoseLayoutOptions} from 'cytoscape-fcose'
 import {onMounted, ref, useTemplateRef, watch} from 'vue'
 
 import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
+import ElementDialog from '@/components/ElementDialog.vue'
 import FormFieldset from '@/components/FormFieldset.vue'
 import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
 import {getIntersectionRestrictions, moveStationsAccordingToRestrictions} from '@/layoutHelper.ts'
-import {randomSelection} from '@/misc.ts'
+import {randomSelection, saveBlob, saveText} from '@/misc.ts'
 
 import {
     AVAILABLE_EDGES,
@@ -123,7 +110,6 @@ import {
     type EdgeType,
     type NodeSelection,
 } from '../scripts/const.ts'
-import type {Data} from '../types/data'
 import {AVAILABLE_LINES, intersections, loadData, user} from './data.ts'
 import {LAYOUTS} from './layouts.ts'
 
@@ -131,12 +117,11 @@ const cyEle = useTemplateRef('cyEle')
 const dialog = useTemplateRef('dialog')
 
 const layout = ref(LAYOUTS[2])
-const selectedLines = ref([AVAILABLE_LINES[8], AVAILABLE_LINES[13]])
+// const selectedLines = ref([AVAILABLE_LINES[8], AVAILABLE_LINES[13]])
+const selectedLines = ref(AVAILABLE_LINES.filter((line) => line.handPickedColor))
 const selectedUser = ref<string[]>([])
 const selectedNodes = ref<NodeSelection[]>([]) // [AVAILABLE_NODE_TYPES.USER])
 const selectedEdges = ref<EdgeSelection[]>([]) // [AVAILABLE_EDGES.MENTION_PER_USER])
-
-const selectedItem = ref<ElementDefinition>()
 
 let cy: cytoscape.Core
 
@@ -156,11 +141,6 @@ onMounted(async () => {
 })
 
 watch(layout, updateLayout)
-
-function restIssueFields(issue: Data.Issue): string {
-    const {key, summary, description, assignee, assignedUsers, mentionedUsers, lastViewed, ...rest} = issue
-    return JSON.stringify(rest, null, 2)
-}
 
 async function updateLayout() {
     cy.clearQueue()
@@ -184,8 +164,7 @@ async function updateLayout() {
 
 function selectItem(element: EventObject): void {
     console.log('selectItem', element.target.position())
-    selectedItem.value = element.target.data()
-    dialog.value?.showPopover()
+    dialog.value?.showPopover(element.target.data())
 }
 
 function isEdgePossible(edge: EdgeSelection): boolean {
@@ -288,6 +267,28 @@ async function updateEdges() {
     cy.add(data.flat())
     updateLayout()
 }
+
+async function exportImage() {
+    const imageBlob = await cy.png({
+        output: 'blob-promise',
+        full: true,
+        scale: 4,
+    })
+    saveBlob(imageBlob, 'export.png')
+}
+
+function exportSvg() {
+    // https://www.npmjs.com/package/cytoscape-svg
+    const svg = cy.svg({
+        full: true,
+        scale: 4,
+    })
+    saveText(svg, 'export.svg')
+}
+
+function exportJson() {
+    saveText(JSON.stringify(cy.json()), 'export.json')
+}
 </script>
 
 <style lang="sass" scoped>
@@ -295,10 +296,13 @@ main
     display: flex
     width: 100vw
     height: 100vh
+    background-color: #EDEEF0
 
 #cy
     flex: 1 1 auto
     aspect-ratio: 5 / 4
+    background-color: #FFF
+    border: 1px solid #000
 
 form
     display: flex
@@ -307,13 +311,4 @@ form
     padding: 16px
     width: 12.25%
     height: 100%
-
-dialog
-    max-width: 80%
-    max-height: 80%
-    overflow: auto
-
-dd
-    margin: 0 0 0 16px
-    padding: 0
 </style>

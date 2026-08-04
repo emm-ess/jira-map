@@ -14,3 +14,23 @@ export function randomSelection<T>(array: T[], amount: number): T[] {
     }
     return selection
 }
+
+export function saveBlob(blob: Blob, filename: string): void {
+    // eslint-disable-next-line compat/compat
+    const url = URL.createObjectURL(blob)
+
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+
+    document.body.append(a)
+    a.click()
+    a.remove()
+
+    URL.revokeObjectURL(url)
+}
+
+export function saveText(text: string, filename: string): void {
+    const blob = new Blob([text], {type: 'text/plain'})
+    saveBlob(blob, filename)
+}
