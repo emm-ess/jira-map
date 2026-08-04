@@ -361,7 +361,7 @@ function compactIntersections(elements: Collection): void {
 
 // --- pipeline ---------------------------------------------------------------
 
-function onLayoutStop(event: LayoutEventObject): void {
+export function onLayoutStop(event: LayoutEventObject): void {
     const elements = getLayoutElements(event)
     if (!elements) {
         return
@@ -384,7 +384,7 @@ export const customFCose = {
     // if this is set to false, then quality option must be "proof"
     randomize: true,
     // Whether or not to animate the layout
-    animate: true,
+    animate: false,
     // Duration of animation in ms, if enabled
     animationDuration: 1000,
     // Easing of animation, if enabled
@@ -398,7 +398,7 @@ export const customFCose = {
     // Whether or not simple nodes (non-compound nodes) are of uniform dimensions
     uniformNodeDimensions: true,
     // Whether to pack disconnected components - cytoscape-layout-utilities extension should be registered and initialized
-    packComponents: false,
+    packComponents: true,
     // Layout step - all, transformed, enforced, cose - for debug purpose only
     step: 'all',
 
@@ -407,7 +407,7 @@ export const customFCose = {
     // False for random, true for greedy sampling
     samplingType: false,
     // Sample size to construct distance matrix
-    sampleSize: 25,
+    sampleSize: 75,
     // Separation amount between nodes
     nodeSeparation: 75,
     // Power iteration tolerance
@@ -432,7 +432,7 @@ export const customFCose = {
     // Nesting factor (multiplier) to compute ideal edge length for nested edges
     nestingFactor: 0.1,
     // Maximum number of iterations to perform - this is a suggested value and might be adjusted by the algorithm as required
-    numIter: 2500,
+    numIter: 3500,
     // For enabling tiling
     tile: true,
     // The comparison function to be used while sorting nodes during tiling operation.
@@ -449,11 +449,11 @@ export const customFCose = {
     // Gravity force (constant)
     gravity: 0.25,
     // Gravity range (constant)
-    gravityRange: 3.8,
+    gravityRange: 1.5,
     // Gravity range (constant) for compounds
     gravityRangeCompound: 1,
     // Gravity force (constant) for compounds
-    gravityCompound: 0.1,
+    gravityCompound: 10,
     // Initial cooling factor for incremental layout
     initialEnergyOnIncremental: 0.3,
 

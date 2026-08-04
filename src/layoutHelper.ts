@@ -39,6 +39,29 @@ function getMainAxisBetweenNodes(nodes: NodeCollection): BaseAxis {
         : BaseAxis.VERTICAL
 }
 
+function getMainAxisOfConnectedEdges(node: NodeSingular): BaseAxis {
+    const connectedEdges = node.connectedEdges()
+    const boundingBox = connectedEdges.boundingBox()
+
+    return boundingBox.w > boundingBox.h
+        ? BaseAxis.HORIZONTAL
+        : BaseAxis.VERTICAL
+}
+
+function getMainAxisForGroupViaEdges(nodes: NodeCollection): BaseAxis {
+    const counts = nodes.reduce((acc, node) => {
+        acc[getMainAxisOfConnectedEdges(node)]++
+        return acc
+    }, {
+        [BaseAxis.HORIZONTAL]: 0,
+        [BaseAxis.VERTICAL]: 0,
+    })
+
+    return counts[BaseAxis.HORIZONTAL] > counts[BaseAxis.VERTICAL]
+        ? BaseAxis.HORIZONTAL
+        : BaseAxis.VERTICAL
+}
+
 function getOtherAxis(axis: BaseAxis): BaseAxis {
     return axis === BaseAxis.HORIZONTAL
         ? BaseAxis.VERTICAL
@@ -90,12 +113,12 @@ function generateNodeRestrictions(nodes: NodeCollection, axis: BaseAxis): Constr
 
 export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
     const restrictions: Constraints[] = []
-    for (const intersection of cy.nodes('[type="intersection"]')) {
+    for (const intersection of cy.nodes(':compound')) {
         const children = intersection.children('[type="station"]')
         if (children.size() < 2) {
             continue
         }
-        const mainAxis = getMainAxisBetweenNodes(children)
+        const mainAxis = getMainAxisForGroupViaEdges(children)
 
         const stationsByLine: NodeCollection[] = intersection.data('lines')
             .map<NodeCollection>((line) => intersection.children(`[type="station"][line="${line}"]`))
@@ -143,7 +166,7 @@ export function moveStationsAccordingToRestrictions(cy: cytoscape.Core, restrict
         const prevNode = cy.getElementById(left || top)[0]
         const nextNode = cy.getElementById(right || bottom)[0]
 
-        const prevPosition = prevNode.position()
+        const prevPosition = {...prevNode.position()}
         if (horizontal) {
             prevPosition.x += gap
         }

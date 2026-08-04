@@ -13,15 +13,18 @@ const linesStyles = [
             width: 8,
             'line-style': 'solid',
             // @see https://js.cytoscape.org/demos/edge-types/
-            'curve-style': 'bezier',
+            // 'curve-style': 'bezier',
+            // -> with round segments the typical 45° edges might be achievable
             // 'curve-style': 'round-segments',
-            // 'curve-style': 'round-taxi',
+            'curve-style': 'round-taxi',
             // 'taxi-turn': '50%',
             'taxi-turn-min-distance': '16px',
 
-            'edge-distances': 'node-position',
-            'source-endpoint': 'inside-to-node',
-            'target-endpoint': 'inside-to-node',
+            'edge-distances': 'intersection',
+            'source-endpoint': 'outside-to-line',
+            'target-endpoint': 'outside-to-line',
+
+            'z-index': 10,
 
             // 'line-fill': 'linear-gradient',
             // 'line-outline-width': 2,
@@ -60,7 +63,7 @@ const linesStyles = [
 export const cytoscopeStyle = [{
     selector: 'node[type="station"]',
     style: {
-        label: 'data(name)',
+        // label: 'data(name)',
         width: 8,
         height: 8,
         'background-color': '#fff',
@@ -69,14 +72,21 @@ export const cytoscopeStyle = [{
         'outline-width': 3,
     },
 }, {
-    selector: 'node[type="intersection"]',
+    selector: 'node[type="intersection"],node[type="intersection-hack"]',
     style: {
         shape: 'round-rectangle',
         padding: 0,
+        'border-width': 0,
         'background-color': '#fff',
         'outline-width': 2,
         'outline-color': '#727782',
         'compound-sizing-wrt-labels': 'exclude',
+        'z-index': 100,
+    },
+}, {
+    selector: 'node:child',
+    style: {
+        visibility: 'hidden',
     },
 }, {
     selector: 'node[type="intersection"]:childless',

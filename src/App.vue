@@ -10,6 +10,12 @@
             >
                 Layout
             </base-select>
+            <button type="button" @click="updateLayout">
+                Re-run layouting
+            </button>
+            <button type="button" @click="addIntersectionHack()">
+                add intersection hack
+            </button>
 
             <form-fieldset>
                 <template #summary>
@@ -99,6 +105,7 @@ import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
 import ElementDialog from '@/components/ElementDialog.vue'
 import FormFieldset from '@/components/FormFieldset.vue'
+import {onLayoutStop} from '@/customLayout.ts'
 import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
 import {getIntersectionRestrictions, moveStationsAccordingToRestrictions} from '@/layoutHelper.ts'
 import {randomSelection, saveBlob, saveText} from '@/misc.ts'
@@ -116,7 +123,7 @@ import {LAYOUTS} from './layouts.ts'
 const cyEle = useTemplateRef('cyEle')
 const dialog = useTemplateRef('dialog')
 
-const layout = ref(LAYOUTS[2])
+const layout = ref(LAYOUTS[1])
 // const selectedLines = ref([AVAILABLE_LINES[8], AVAILABLE_LINES[13]])
 const selectedLines = ref(AVAILABLE_LINES.filter((line) => line.handPickedColor))
 const selectedUser = ref<string[]>([])
@@ -144,6 +151,16 @@ watch(layout, updateLayout)
 
 async function updateLayout() {
     cy.clearQueue()
+    removeIntersectionHack()
+    // todo: that's quick solution
+    for (const intersection of cy.nodes('[type="intersection"]')) {
+        if (intersection.children().length < 2) {
+            intersection.children().move({
+                parent: null,
+            })
+            intersection.remove()
+        }
+    }
     const layoutFinished = cy.promiseOn('layoutstop')
     console.log('starting')
     cy.layout(layout.value.layout).run()
@@ -156,9 +173,31 @@ async function updateLayout() {
         moveStationsAccordingToRestrictions(cy, restrictions.relativeConstrains)
         cy.layout({
             ...layout.value.layout,
-            randomize: false,
+            randomize: true,
             ...restrictions,
+            stop: onLayoutStop,
         } as FcoseLayoutOptions).run()
+    }
+}
+
+function removeIntersectionHack() {
+    cy.remove(cy.nodes('[type="intersection-hack"]'))
+}
+
+function addIntersectionHack() {
+    for (const intersection of cy.nodes('[type="intersection"]')) {
+        cy.add({
+            group: 'nodes',
+            position: intersection.position(),
+            data: {
+                id: `${intersection.id()}-hack`,
+                type: 'intersection-hack',
+            },
+            style: {
+                width: intersection.width(),
+                height: intersection.height(),
+            },
+        })
     }
 }
 
