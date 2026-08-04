@@ -31,12 +31,12 @@ const linesStyles = [
     },
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     ...AVAILABLE_LINES.flatMap<CytoscapeOptions['style'][]>((line) => [{
-        selector: `edge[area="${line.name}"]`,
+        selector: `edge[line="${line.name}"]`,
         style: {
             'line-color': line.colorNormal,
         },
     }, {
-        selector: `edge[area="${line.name}"].unused`,
+        selector: `edge[line="${line.name}"].unused`,
         style: {
             'line-color': line.colorUnused,
         },

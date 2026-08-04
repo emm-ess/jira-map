@@ -251,13 +251,73 @@ function prepareIssueLinks(): void {
  * Transport-Lines
  *******************/
 
-const noYetDoneSprint = -1
+const notYetDoneSprint = -1
 type Station = {
     sprintId: number
     issues: Data.Issue[]
 }
 
+type StationNode = ElementDefinition & {
+    data: DataPrepared.Station
+}
+
+/**
+ * Maps issue IDs to their corresponding stations via sprints
+ * @type {Map<string, Map<number, Set<StationNode>>>}
+ */
+const issueStationMap = new Map<Data.Issue, Map<number, Set<StationNode>>>()
+
 type Lines = Map<string, ElementDefinition[]>
+
+function createTransportGroups(): Map<string, Data.Issue[]> {
+    const areaGraph = new AreaGraph()
+    const transportGroups = new Map<string, Data.Issue[]>()
+
+    issues.values()
+        .filter((issue) => issueMeta.get(issue.id)?.area)
+        .forEach((issue) => {
+            const areas = issueMeta.get(issue.id)?.area ?? []
+            areaGraph.getRootNodes(areas).forEach((area) => {
+                if (!transportGroups.has(area)) {
+                    transportGroups.set(area, [])
+                }
+                transportGroups.get(area)?.push(issue)
+            })
+        })
+    return transportGroups
+}
+
+function getSortedSprintIds(issuesBySprint: Map<number, Data.Issue[]>): number[] {
+    return issuesBySprint.keys().toArray().sort((sprintA, sprintB) => {
+        if (sprintA === notYetDoneSprint) {
+            return 1
+        }
+        if (sprintB === notYetDoneSprint) {
+            return -1
+        }
+
+        const startDateA = sprints.get(sprintA)!.startDate!
+        const startDateB = sprints.get(sprintB)!.startDate!
+        return startDateA.localeCompare(startDateB)
+    })
+}
+
+function addStationNodeToLookupMap(station: Station, stationNode: StationNode): void {
+    const sprintId = station.sprintId
+    // ignore the future for now
+    if (sprintId === notYetDoneSprint) {
+        return
+    }
+    for (const issue of station.issues) {
+        if (!issueStationMap.has(issue)) {
+            issueStationMap.set(issue, new Map())
+        }
+        if (!issueStationMap.get(issue)!.has(sprintId)) {
+            issueStationMap.get(issue)!.set(sprintId, new Set())
+        }
+        issueStationMap.get(issue)!.get(sprintId)!.add(stationNode)
+    }
+}
 
 function buildLine(area: string, stations: Station[]): ElementDefinition[] {
     let lastSprintNumber: undefined | number
@@ -266,9 +326,9 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
         const sprintId = station.sprintId
         const sprint = sprints.get(station.sprintId)
         const stationId: DataPrepared.StationId = `${area}-station-${sprintId}`
-        const future = station.sprintId === noYetDoneSprint
+        const future = station.sprintId === notYetDoneSprint
 
-        const stationNode: ElementDefinition = {
+        const stationNode: StationNode = {
             group: 'nodes',
             data: {
                 type: 'station',
@@ -286,8 +346,10 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 assignedUsers: unique(station.issues.flatMap((issue) => issue.assignedUsersUnique ?? [])),
                 mentionedUsers: unique(station.issues.flatMap((issue) => issue.mentionedUsersUnique ?? [])),
                 areas: unique(station.issues.flatMap((issue) => issueMeta.get(issue.id)?.area ?? []))
-            } satisfies DataPrepared.Station,
+            },
         }
+        addStationNodeToLookupMap(station, stationNode)
+
         const lineSegment: ElementDefinition | undefined = index > 0
             ? {
                 group: 'edges',
@@ -310,20 +372,7 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
 }
 
 function createTransportLines(): Lines {
-    const areaGraph = new AreaGraph()
-    const transportGroups = new Map<string, Data.Issue[]>()
-
-    issues.values()
-        .filter((issue) => issueMeta.get(issue.id)?.area)
-        .forEach((issue) => {
-            const areas = issueMeta.get(issue.id)?.area ?? []
-            areaGraph.getRootNodes(areas).forEach((area) => {
-                if (!transportGroups.has(area)) {
-                    transportGroups.set(area, [])
-                }
-                transportGroups.get(area)?.push(issue)
-            })
-        })
+    const transportGroups = createTransportGroups()
 
     return new Map(transportGroups.entries()
         .filter(([area, areaIssues]) => {
@@ -341,9 +390,9 @@ function createTransportLines(): Lines {
                 ? issue.sprints.map((sprintId) => {
                     return !!sprints.get(sprintId)?.startDate
                         ? sprintId
-                        : noYetDoneSprint
+                        : notYetDoneSprint
                 })
-                : [noYetDoneSprint]
+                : [notYetDoneSprint]
             issueSprints.forEach((sprintId) => {
                 const sprintIssues = issuesBySprint.get(sprintId) ?? []
                 sprintIssues.push(issue)
@@ -351,20 +400,8 @@ function createTransportLines(): Lines {
             })
         })
 
-        const sprintIds = issuesBySprint.keys().toArray().sort((sprintA, sprintB) => {
-            if (sprintA === noYetDoneSprint) {
-                return 1
-            }
-            if (sprintB === noYetDoneSprint) {
-                return -1
-            }
-
-            const startDateA = sprints.get(sprintA)!.startDate!
-            const startDateB = sprints.get(sprintB)!.startDate!
-            return startDateA.localeCompare(startDateB)
-        })
-
-        const stations = sprintIds.map((sprintId) => ({sprintId, issues: issuesBySprint.get(sprintId) ?? []}))
+        const stations = getSortedSprintIds(issuesBySprint)
+            .map((sprintId) => ({sprintId, issues: issuesBySprint.get(sprintId) ?? []}))
         return [area, buildLine(area, stations)]
     }))
 }
@@ -373,6 +410,36 @@ type IntersectionEntry = {
     lines: Set<string>
     nodes: Set<ElementDefinition>
     issues: Set<Data.Issue>
+}
+
+function calculateIntersectionsNew() {
+    const baseIntersections = new Map<string, IntersectionEntry>()
+    for (const [issue, sprints] of issueStationMap.entries()) {
+        for (const stationNodes of sprints.values()) {
+            if (stationNodes.size < 2) {
+                continue
+            }
+            const stationArray = stationNodes.values().toArray()
+            const key = stationArray
+                .map<string>((stationNode) => `${stationNode.data.line}-${stationNode.data.sprintId}`)
+                .sort((a, b) => a.localeCompare(b))
+                .join('|')
+            if (!baseIntersections.has(key)) {
+                baseIntersections.set(key, {
+                    lines: new Set(),
+                    nodes: new Set(),
+                    issues: new Set(),
+                })
+            }
+            const entry = baseIntersections.get(key)!
+            entry.issues.add(issue)
+            stationArray.forEach((stationNode) => {
+                entry.lines.add(stationNode.data.line)
+                entry.nodes.add(stationNode)
+            })
+        }
+    }
+    return baseIntersections
 }
 
 function calculateIntersections(lines: Lines): Map<string, IntersectionEntry> {
@@ -433,7 +500,7 @@ function calculateIntersections(lines: Lines): Map<string, IntersectionEntry> {
 function createNetwork(): void {
     const lines = createTransportLines()
 
-    const intersections = calculateIntersections(lines)
+    const intersections = calculateIntersectionsNew()
 
     const intersectionNodes: ElementDefinition[] = []
     for (const [id, entry] of intersections.entries()) {
@@ -445,7 +512,7 @@ function createNetwork(): void {
                 type: 'intersection',
                 lines: entry.lines.values().toArray(),
                 issues: entry.issues.values()
-                    .map((id) => simplifyIssue(issues.get(id)))
+                    .map((issue) => simplifyIssue(issue))
                     .toArray(),
                 children: entry.nodes.values().map((node) => node.data.id).toArray(),
             }

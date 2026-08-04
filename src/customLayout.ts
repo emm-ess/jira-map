@@ -137,7 +137,7 @@ function directionKey(direction: Position): string {
 function buildLines(elements: Collection, positions: Positions): LineGeometry[] {
     const byLine = new Map<string, Edge[]>()
     for (const edge of getSegmentEdges(elements)) {
-        const lineId = edge.data('area') as string
+        const lineId = edge.data('line') as string
         const group = byLine.get(lineId)
         if (group) {
             group.push(edge)
@@ -279,8 +279,8 @@ function tryShiftCrossing(
     second: Edge,
     shifted: Set<string>,
 ): boolean {
-    const firstLine = first.data('area') as string
-    const secondLine = second.data('area') as string
+    const firstLine = first.data('line') as string
+    const secondLine = second.data('line') as string
     if (firstLine === secondLine) {
         return false
     }
