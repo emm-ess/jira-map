@@ -5,7 +5,16 @@ import type {Data} from '../types/data.ts'
 import {AreaGraph} from '../src/areaGraph.ts'
 import {AVAILABLE_EDGES, AVAILABLE_NODE_TYPES, EDGE_TYPE, NODE_TYPE} from './const.ts'
 import type {CommentMentions} from './evaluateData.ts'
-import {additionalDataDir, dataDir, readJsonFile, readMap, simplifiedDataDir, unique, writeArray} from './util.ts'
+import {
+    additionalDataDir,
+    dataDir,
+    readArray,
+    readJsonFile,
+    readMap,
+    simplifiedDataDir,
+    unique,
+    writeArray,
+} from './util.ts'
 
 // additional user-provided data
 const issueMeta = readMap<DataAdditional.IssueMetaFile>('issueMeta.json', additionalDataDir)
@@ -526,18 +535,24 @@ function createNetwork(): void {
     for (const [area, elements] of lines) {
         writeArray(elements, `lines/${normalizeFilename(area)}`, simplifiedDataDir)
     }
+
+    const predefinedColors = readArray('colors.json', additionalDataDir)
+
     const areasWithLines = lines.entries().toArray()
-        .map((line) => line[0])
-        .sort((a, b) => a.localeCompare(b))
-        .map((line) => {
+        .sort((a, b) => b[1].length - a[1].length)
+        .map(([name], index) => {
+            const handPickedColor = index < predefinedColors.length
+            const predefinedColor = handPickedColor &&  predefinedColors[index]
             const hue = Math.floor(Math.random() * 360)
             return {
-                name: line,
-                filename: `lines/${normalizeFilename(line)}`,
-                colorNormal: `hsl(${hue}, 100%, 50%)`,
-                colorUnused: `hsl(${hue}, 70%, 85%)`,
+                name,
+                handPickedColor,
+                filename: `lines/${normalizeFilename(name)}`,
+                colorNormal: predefinedColor?.normal || `hsl(${hue}, 100%, 50%)`,
+                colorUnused: predefinedColor?.unused || `hsl(${hue}, 70%, 85%)`,
             }
         })
+        .sort((a, b) => a.name.localeCompare(b.name))
     writeArray(areasWithLines, 'lines', simplifiedDataDir)
 }
 
