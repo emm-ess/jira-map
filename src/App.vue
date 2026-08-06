@@ -42,9 +42,43 @@
                     :key="human.name"
                     v-model="selectedUser"
                     :value="human"
+                    :disabled="sprintRange"
                 >
                     {{ human.displayName }}
                 </base-checkbox>
+            </form-fieldset>
+
+            <form-fieldset>
+                <template #summary>
+                    Sprint-Range
+                </template>
+                <base-checkbox
+                    id="sprintRange"
+                    v-model="sprintRange"
+                >
+                    SprintRange
+                </base-checkbox>
+
+                <label>
+                    Start
+                    <input
+                        v-model="startSprint"
+                        type="number"
+                        :disabled="!sprintRange"
+                        :min="sprintBounds[0]"
+                        :max="sprintBounds[1]"
+                    >
+                </label>
+                <label>
+                    End
+                    <input
+                        v-model="endSprint"
+                        type="number"
+                        :disabled="!sprintRange"
+                        :min="sprintBounds[0]"
+                        :max="sprintBounds[1]"
+                    >
+                </label>
             </form-fieldset>
 
             <details>
@@ -108,9 +142,9 @@
 </template>
 
 <script lang="ts" setup>
-import cytoscape, {type EventObject} from 'cytoscape'
+import cytoscape, {type EventObject, type NodeCollection, type NodeSingular} from 'cytoscape'
 import type {FcoseLayoutOptions} from 'cytoscape-fcose'
-import {onMounted, ref, useTemplateRef, watch} from 'vue'
+import {computed, onMounted, ref, useTemplateRef, watch} from 'vue'
 
 import BaseCheckbox from '@/components/BaseCheckbox.vue'
 import BaseSelect from '@/components/BaseSelect.vue'
@@ -119,7 +153,7 @@ import FormFieldset from '@/components/FormFieldset.vue'
 import {onLayoutStop} from '@/customLayout.ts'
 import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
 import {getIntersectionRestrictions, moveStationsAccordingToRestrictions} from '@/layoutHelper.ts'
-import {randomSelection, saveBlob, saveText} from '@/misc.ts'
+import {saveBlob, saveText} from '@/misc.ts'
 
 import {
     AVAILABLE_EDGES,
@@ -141,6 +175,11 @@ const selectedLines = ref(AVAILABLE_LINES.filter((line) => line.handPickedColor)
 const selectedUser = ref<string[]>([])
 const selectedNodes = ref<NodeSelection[]>([]) // [AVAILABLE_NODE_TYPES.USER])
 const selectedEdges = ref<EdgeSelection[]>([]) // [AVAILABLE_EDGES.MENTION_PER_USER])
+
+const sprintRange = ref(false)
+const startSprint = ref(1)
+const endSprint = ref(10)
+const sprintBounds = ref<[min: number, max: number]>([1, 10])
 
 let cy: cytoscape.Core
 
@@ -233,6 +272,20 @@ watch(selectedLines, updateLines, {deep: true})
 watch(selectedUser, updateUser, {deep: true})
 watch(selectedNodes, updateNodes, {deep: true})
 watch(selectedEdges, updateEdges, {deep: true})
+watch([startSprint, endSprint, sprintRange], updateSprintRange)
+
+function updateSprintBounds(): void {
+    let min = Infinity
+    let max = 0
+    for (const node of cy.nodes('[type="station"]')) {
+        const sprintNumber = node.data('sprintNumber')
+        if (sprintNumber !== undefined) {
+            min = Math.min(min, sprintNumber)
+            max = Math.max(max, sprintNumber)
+        }
+    }
+    sprintBounds.value = [min, max]
+}
 
 async function updateLines() {
     // eslint-disable-next-line compat/compat
@@ -264,20 +317,41 @@ async function updateLines() {
     // const helperEdges = createInvisibleForces(cy.nodes().toArray() as StationNode[])
     // console.log('---> helperEdges:', helperEdges)
     // cy.add(helperEdges)
+    updateSprintBounds()
     updateUser()
     updateLayout()
 }
 
 function updateUser() {
+    if (sprintRange.value) {
+        return
+    }
     // just take both things. better be safe than sorry.
     const userIdentifier = new Set(selectedUser.value.flatMap((user) => [user.name, user.key]))
-    const stationNodes = cy.nodes('[type="station"]')
-    const assignedStationNodes = stationNodes.filter((node) => {
+    updateMarkedNodes((node) => {
         return node.data('assignedUsers').some((assignedUser) => userIdentifier.has(assignedUser))
     })
-    const filtered = selectedUser.value.length
+}
+
+function updateSprintRange() {
+    if (!sprintRange.value) {
+        return
+    }
+    const startSprintClamped = Math.max(startSprint.value, sprintBounds.value[0])
+    const endSprintClamped = Math.min(endSprint.value, sprintBounds.value[1])
+    const sprintValues = new Set(Array.from({length: endSprintClamped - startSprintClamped + 1}, (_, i) => i + startSprintClamped))
+    console.log('sprintValues', sprintValues)
+    updateMarkedNodes((node) => {
+        return sprintValues.has(node.data('sprintNumber'))
+    })
+}
+
+function updateMarkedNodes(nodeFilter: (node: NodeSingular) => boolean) {
+    const stationNodes = cy.nodes('[type="station"]')
+    const filteredNodes = stationNodes.filter(nodeFilter)
+    const filtered = !!filteredNodes.size()
     for (const node of stationNodes) {
-        if (filtered && !assignedStationNodes.contains(node)) {
+        if (filtered && !filteredNodes.contains(node)) {
             node.addClass('unused')
         }
         else {
@@ -285,8 +359,8 @@ function updateUser() {
         }
     }
     for (const edge of cy.edges('[type="segment"]')) {
-        if (filtered && (!assignedStationNodes.contains(edge.source())
-            || !assignedStationNodes.contains(edge.target()))) {
+        if (filtered && (!filteredNodes.contains(edge.source())
+            || !filteredNodes.contains(edge.target()))) {
             edge.addClass('unused')
         }
         else {

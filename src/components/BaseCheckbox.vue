@@ -12,10 +12,10 @@
 </template>
 
 <script setup lang="ts" generic="ValueType">
-const model = defineModel<ValueType[]>({required: true})
+const model = defineModel<ValueType>({required: true})
 
 defineProps<{
-    value: ValueType
+    value?: ValueType
     id: string
     disabled?: boolean
 }>()
