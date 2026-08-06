@@ -90,6 +90,17 @@
             <button type="button" @click="exportJson">
                 Export JSON
             </button>
+            <button type="button" @click="selectJsonFile">
+                Import JSON
+            </button>
+            <input
+                id="json-import"
+                ref="fileInput"
+                type="file"
+                name="json-import"
+                accept=".json"
+                @change="importJsonFile()"
+            >
         </form>
     </main>
 
@@ -122,6 +133,7 @@ import {LAYOUTS} from './layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
 const dialog = useTemplateRef('dialog')
+const fileInput = useTemplateRef('fileInput')
 
 const layout = ref(LAYOUTS[1])
 // const selectedLines = ref([AVAILABLE_LINES[8], AVAILABLE_LINES[13]])
@@ -185,6 +197,7 @@ function removeIntersectionHack() {
 }
 
 function addIntersectionHack() {
+    removeIntersectionHack()
     for (const intersection of cy.nodes('[type="intersection"]')) {
         cy.add({
             group: 'nodes',
@@ -328,6 +341,17 @@ function exportSvg() {
 function exportJson() {
     saveText(JSON.stringify(cy.json()), 'export.json')
 }
+
+function selectJsonFile() {
+    if (fileInput.value) {
+        fileInput.value.click()
+    }
+}
+
+async function importJsonFile() {
+    const content = await fileInput.value.files[0].text()
+    cy.json(JSON.parse(content))
+}
 </script>
 
 <style lang="sass" scoped>
@@ -350,4 +374,7 @@ form
     padding: 16px
     width: 12.25%
     height: 100%
+
+#json-import
+    display: none
 </style>
