@@ -39,6 +39,11 @@ function getMainAxisBetweenNodes(nodes: NodeCollection): BaseAxis {
         : BaseAxis.VERTICAL
 }
 
+function getMainAxisOfConnectedNodes(node: NodeSingular): BaseAxis {
+    const collection = cytoscape
+        .collection.add
+}
+
 function getMainAxisOfConnectedEdges(node: NodeSingular): BaseAxis {
     const connectedEdges = node.connectedEdges()
     const boundingBox = connectedEdges.boundingBox()
@@ -68,8 +73,12 @@ function getOtherAxis(axis: BaseAxis): BaseAxis {
         : BaseAxis.HORIZONTAL
 }
 
+function sortNodeArray(nodes: NodeSingular[], axis: BaseAxis): NodeSingular[] {
+    return nodes.sort((a, b) => a.position(axis) - b.position(axis))
+}
+
 function sortNodesOnAxis(nodes: NodeCollection, axis: BaseAxis): NodeSingular[] {
-    return nodes.toArray().sort((a, b) => a.position(axis) - b.position(axis))
+    return sortNodeArray(nodes.toArray(), axis)
 }
 
 type Constraints = {
@@ -77,10 +86,10 @@ type Constraints = {
     alignmentConstraint: FcoseAlignmentConstraint
 }
 
-function generateNodeRestrictions(nodes: NodeCollection, axis: BaseAxis): Constraints {
+function generateNodeRestrictions(nodes: NodeSingular[], axis: BaseAxis): Constraints {
     const alignmentConstraint: string[] = []
     const relativeConstrains: FcoseRelativePlacementConstraint[] = []
-    const sorted = sortNodesOnAxis(nodes, axis)
+    const sorted = sortNodeArray(nodes, axis)
     let prevId = sorted[0].id()
     alignmentConstraint.push(prevId)
     for (const nextNode of sorted.slice(1)) {
@@ -106,7 +115,9 @@ function generateNodeRestrictions(nodes: NodeCollection, axis: BaseAxis): Constr
     return {
         relativeConstrains,
         alignmentConstraint: {
-            [axisName]: alignmentConstraint,
+            [axisName]: alignmentConstraint.length > 1
+                ? alignmentConstraint
+                : [],
         },
     }
 }
@@ -115,39 +126,61 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
     const restrictions: Constraints[] = []
     for (const intersection of cy.nodes(':compound')) {
         const children = intersection.children('[type="station"]')
+        console.log('children', children.size(), children)
         if (children.size() < 2) {
             continue
         }
-        const mainAxis = getMainAxisForGroupViaEdges(children)
 
-        const stationsByLine: NodeCollection[] = intersection.data('lines')
-            .map<NodeCollection>((line) => intersection.children(`[type="station"][line="${line}"]`))
-            .filter((nodes) => nodes.size() > 0)
-
-        // topmost left/top node of each line
-        const mainStations: string[] = []
-        // restrict direction of stations on same transport-line
-        for (const stations of stationsByLine) {
-            if (stations.size() < 2) {
-                mainStations.push(stations[0].id())
-                continue
-            }
-            // const stationDirection = getMainAxisBetweenNodes(stations)
-            restrictions.push(generateNodeRestrictions(stations, mainAxis))
-            mainStations.push(sortNodesOnAxis(stations, mainAxis)[0].id())
+        // eslint-disable-next-line unicorn/no-array-reduce
+        const axisGroups = children.reduce((groups, child) => {
+            const axis = getMainAxisOfConnectedEdges(child)
+            groups[axis].push(child)
+            return groups
+        }, {
+            [BaseAxis.HORIZONTAL]: [],
+            [BaseAxis.VERTICAL]: [],
+        })
+        // using opposite names is intentional
+        const horizontal = sortNodeArray(axisGroups[BaseAxis.VERTICAL], BaseAxis.HORIZONTAL)
+        const vertical = sortNodeArray(axisGroups[BaseAxis.HORIZONTAL], BaseAxis.VERTICAL)
+        if (horizontal.length > 0 && vertical.length > 0) {
+            vertical.unshift(horizontal[0])
         }
+        if (horizontal.length) {
+            restrictions.unshift(generateNodeRestrictions(horizontal, BaseAxis.HORIZONTAL))
+        }
+        if (vertical.length) {
+            restrictions.unshift(generateNodeRestrictions(vertical, BaseAxis.VERTICAL))
+        }
+        // const mainAxis = getMainAxisForGroupViaEdges(children)
+        // const stationsByLine: NodeCollection[] = intersection.data('lines')
+        //     .map<NodeCollection>((line) => intersection.children(`[type="station"][line="${line}"]`))
+        //     .filter((nodes) => nodes.size() > 0)
+        //
+        // // topmost left/top node of each line
+        // const mainStations: string[] = []
+        // // restrict direction of stations on same transport-line
+        // for (const stations of stationsByLine) {
+        //     if (stations.size() < 2) {
+        //         mainStations.push(stations[0].id())
+        //         continue
+        //     }
+        //     // const stationDirection = getMainAxisBetweenNodes(stations)
+        //     restrictions.push(generateNodeRestrictions(stations, mainAxis))
+        //     mainStations.push(sortNodesOnAxis(stations, mainAxis)[0].id())
+        // }
 
-        const selector = mainStations.map((id) => `#${id}`).join(', ')
-        const mainStationCollection = intersection.children(selector)
-        // const mainDirection = getMainAxisBetweenNodes(mainStationCollection)
-        // move instructions for "guidance" stations to the top
-        restrictions.unshift(generateNodeRestrictions(mainStationCollection, getOtherAxis(mainAxis)))
+        // const selector = mainStations.map((id) => `#${id}`).join(', ')
+        // const mainStationCollection = intersection.children(selector)
+        // // const mainDirection = getMainAxisBetweenNodes(mainStationCollection)
+        // // move instructions for "guidance" stations to the top
+        // restrictions.unshift(generateNodeRestrictions(mainStationCollection, getOtherAxis(mainAxis)))
     }
     return restrictions.reduce<Constraints>((acc, curr) => {
         acc.relativeConstrains.push(...curr.relativeConstrains)
 
         for (const key in curr.alignmentConstraint) {
-            acc.alignmentConstraint[key].push(...curr.alignmentConstraint[key])
+            acc.alignmentConstraint[key].push(curr.alignmentConstraint[key])
         }
         return acc
     }, {
@@ -175,5 +208,5 @@ export function moveStationsAccordingToRestrictions(cy: cytoscape.Core, restrict
         }
         nextNode.position(prevPosition)
     }
-    // cy().fit(elements, 30)
+    cy.fit()
 }

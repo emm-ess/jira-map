@@ -84,11 +84,11 @@ export const cytoscopeStyle = [{
         'z-index': 100,
     },
 }, {
-    selector: 'node:child',
-    style: {
-        visibility: 'hidden',
-    },
-}, {
+//     selector: 'node:child',
+//     style: {
+//         visibility: 'hidden',
+//     },
+// }, {
     selector: 'node[type="intersection"]:childless',
     style: {
         display: 'none',
