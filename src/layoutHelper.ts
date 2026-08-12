@@ -1,6 +1,14 @@
 import type {NodeCollection, NodeSingular, Position} from 'cytoscape'
 import type {FcoseAlignmentConstraint, FcoseFixedNodeConstraint, FcoseRelativePlacementConstraint} from 'cytoscape-fcose'
 
+const BOUNDING_BOX_OPTIONS = {
+    includeNodes: true,
+    includeEdges: false,
+    includeLabels: false,
+    includeOverlays: false,
+    includeUnderlays: false,
+} as const
+
 export const DIRECTIONS = [
     {x: 1, y: -1},
     {x: 1, y: 0},
@@ -32,7 +40,7 @@ export function nearestDirection(from: Position, to: Position): Position {
 }
 
 function getMainAxisBetweenNodes(nodes: NodeCollection): BaseAxis {
-    const boundingBox = nodes.boundingBox()
+    const boundingBox = nodes.boundingBox(BOUNDING_BOX_OPTIONS)
 
     return boundingBox.w > boundingBox.h
         ? BaseAxis.HORIZONTAL
@@ -44,18 +52,17 @@ function getMainAxisOfConnectedNodes(node: NodeSingular): BaseAxis {
         .collection.add
 }
 
-function getMainAxisOfConnectedEdges(node: NodeSingular): BaseAxis {
-    const connectedEdges = node.connectedEdges()
-    const boundingBox = connectedEdges.boundingBox()
+function getMainAxisOfClosedNeighborhood(node: NodeSingular): BaseAxis {
+    const boundingBox = node.closedNeighborhood().boundingBox(BOUNDING_BOX_OPTIONS)
 
     return boundingBox.w > boundingBox.h
         ? BaseAxis.HORIZONTAL
         : BaseAxis.VERTICAL
 }
 
-function getMainAxisForGroupViaEdges(nodes: NodeCollection): BaseAxis {
+function getMainAxisForGroupViaClosedNeighborhood(nodes: NodeCollection): BaseAxis {
     const counts = nodes.reduce((acc, node) => {
-        acc[getMainAxisOfConnectedEdges(node)]++
+        acc[getMainAxisOfClosedNeighborhood(node)]++
         return acc
     }, {
         [BaseAxis.HORIZONTAL]: 0,
@@ -73,12 +80,23 @@ function getOtherAxis(axis: BaseAxis): BaseAxis {
         : BaseAxis.HORIZONTAL
 }
 
-function sortNodeArray(nodes: NodeSingular[], axis: BaseAxis): NodeSingular[] {
+function sortNodeArraySimple(nodes: NodeSingular[], axis: BaseAxis): NodeSingular[] {
     return nodes.sort((a, b) => a.position(axis) - b.position(axis))
 }
 
+function sortNodeArray(nodes: NodeSingular[], axis: BaseAxis): NodeSingular[] {
+    const axisName = axis === BaseAxis.HORIZONTAL
+        ? 'x1'
+        : 'y1'
+    return nodes.sort((a, b) => {
+        const aCoord = a.closedNeighborhood().boundingBox(BOUNDING_BOX_OPTIONS)[axisName]
+        const bCoord = b.closedNeighborhood().boundingBox(BOUNDING_BOX_OPTIONS)[axisName]
+        return aCoord - bCoord
+    })
+}
+
 function sortNodesOnAxis(nodes: NodeCollection, axis: BaseAxis): NodeSingular[] {
-    return sortNodeArray(nodes.toArray(), axis)
+    return sortNodeArraySimple(nodes.toArray(), axis)
 }
 
 type Constraints = {
@@ -133,7 +151,7 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
 
         // eslint-disable-next-line unicorn/no-array-reduce
         const axisGroups = children.reduce((groups, child) => {
-            const axis = getMainAxisOfConnectedEdges(child)
+            const axis = getMainAxisOfClosedNeighborhood(child)
             groups[axis].push(child)
             return groups
         }, {

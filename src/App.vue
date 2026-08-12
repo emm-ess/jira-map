@@ -222,12 +222,16 @@ async function updateLayout() {
         const restrictions = getIntersectionRestrictions(cy.nodes('[type="intersection"]'))
         console.log('rest', restrictions)
         moveStationsAccordingToRestrictions(cy, restrictions.relativeConstrains)
+        // const layoutFinished2 = cy.promiseOn('layoutstop')
         // cy.layout({
         //     ...layout.value.layout,
-        //     randomize: true,
+        //     // randomize: true,
         //     ...restrictions,
         //     // stop: onLayoutStop,
         // } as FcoseLayoutOptions).run()
+        // await layoutFinished2
+        // const restrictions2 = getIntersectionRestrictions(cy.nodes('[type="intersection"]'))
+        // moveStationsAccordingToRestrictions(cy, restrictions2.relativeConstrains)
     }
 }
 
