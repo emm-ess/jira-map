@@ -1,13 +1,11 @@
-import type {ElementDefinition} from 'cytoscape'
+import * as userFile from '../data-prepared/data/users.json'
+import * as intersectionsRecord from '../data-prepared/intersections.json'
+import * as lines from '../data-prepared/lines.json'
 
-import * as intersectionsRecord from '../data-simplified/intersections.json'
-import * as lines from '../data-simplified/lines.json'
-import * as userFile from '../data-simplified/user.json'
-
-const cache = new Map<string, ElementDefinition[]>()
+const cache = new Map<string, unknown>()
 
 const modules = import.meta.glob(
-    '../data-simplified/*/*.json',
+    '../data-prepared/*/*.json',
     {import: 'default'},
 )
 
@@ -15,12 +13,12 @@ export const intersections = intersectionsRecord.default
 export const user = userFile.default
 export const AVAILABLE_LINES = lines.default
 
-export async function loadData(file: string): Promise<ElementDefinition[]> {
+export async function loadData<T>(file: string): Promise<T> {
     if (cache.has(file)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return cache.get(file)!
     }
-    const data: ElementDefinition[] = await modules[`../data-simplified/${file}.json`]()
+    const data: T = await modules[`../data-prepared/${file}.json`]()
     cache.set(file, data)
     return data
 }

@@ -16,7 +16,7 @@ export namespace DataPrepared {
         assignedUsers: string[]
         mentionedUsers: string[]
         areas: string[]
-        issues: Data.Issue[]
+        issues: string[]
     }
 
     export type LineSegment = {
@@ -28,5 +28,9 @@ export namespace DataPrepared {
         target: StationId
         /** based on number of sprint between source and target */
         distance: number
+    }
+
+    export type Issue = Omit<Data.Issue, 'changelog'> & {
+        area?: string[]
     }
 }

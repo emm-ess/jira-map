@@ -11,9 +11,9 @@ import {
     readArray,
     readJsonFile,
     readMap,
-    simplifiedDataDir,
+    preparedDataDir,
     unique,
-    writeArray,
+    writeArray, writeMap,
 } from './util.ts'
 
 // additional user-provided data
@@ -24,6 +24,7 @@ const users = readMap<Data.UserFile>('users.json', dataDir)
 const issueTypes = readMap<Data.IssueTypeFile>('types.json', dataDir)
 const sprints = readMap<Data.SprintFile>('sprints.json', dataDir, true)
 const issues = readMap<Data.IssueFile>('issues.json', dataDir)
+const components = readMap<Data.ComponentFile>('components.json', dataDir)
 
 
 
@@ -40,31 +41,6 @@ function applyMetaData(): void {
  * HElPER
  *******************/
 
-function simplifyIssue(issue: Data.Issue) {
-    return {
-        id: issue.id,
-        key: issue.key,
-        issueType: issueTypes.get(issue.issuetype)?.name,
-        summary: issue.summary,
-        status: issue.status,
-        sprints: issue.sprints,
-        area: issueMeta.get(issue.id)?.area,
-        components: issueMeta.get(issue.id)?.components || issue.components,
-        assignedUsers: issue.assignedUsers,
-        mentionedUsers: issue.mentionedUsers,
-    }
-}
-
-function issueToNode(issue: Data.Issue): ElementDefinition {
-    return {
-        group: 'nodes',
-        data: {
-            ...simplifyIssue(issue),
-            type: NODE_TYPE.ISSUE,
-        }
-    }
-}
-
 function normalizeFilename(name: string): string {
     return name.toLowerCase()
         .replaceAll(' ', '-')
@@ -74,64 +50,101 @@ function normalizeFilename(name: string): string {
 }
 
 /* ****************+
+ * "raw" data
+ *******************/
+
+function writeIssues(): void {
+    const preparedIssues = new Map<string, DataPrepared.Issue>()
+    issues.forEach((issue, id) => {
+        const {changelog, ...rest} = issue
+        const preparedIssue: DataPrepared.Issue = {
+            ...rest,
+            area: issueMeta.get(issue.id)?.area,
+            components: issueMeta.get(issue.id)?.components || issue.components,
+        }
+        preparedIssues.set(id, preparedIssue)
+    })
+    writeMap(preparedIssues, 'data/issues', preparedDataDir)
+}
+
+function writeRawData(): void {
+    writeIssues()
+    writeMap(users, 'data/users', preparedDataDir)
+    writeMap(sprints, 'data/sprints', preparedDataDir)
+    writeMap(issueTypes, 'data/issueTypes', preparedDataDir)
+    writeMap(components, 'data/components', preparedDataDir)
+}
+
+/* ****************+
  * NODES
  *******************/
+
 export type UserData = {
     type: 'user'
     id: string
     displayName: string
 }
 
-function prepareUsers(): void {
-    const usersForCytoscape = users.values().map<ElementDefinition>(user => ({
-        group: 'nodes',
-        data: {
-            type: NODE_TYPE.USER,
-            id: user.key,
-            displayName: user.displayName,
-        } as const satisfies UserData,
-    })).toArray()
-    writeArray(usersForCytoscape, AVAILABLE_NODE_TYPES.USER.filename, simplifiedDataDir)
-    writeArray(users.values().toArray(), 'user', simplifiedDataDir)
+function createUserNodes(): void {
+    const usersForCytoscape = users.values()
+        .map<ElementDefinition>(user => ({
+            group: 'nodes',
+            data: {
+                type: NODE_TYPE.USER,
+                id: user.key,
+                displayName: user.displayName,
+            } as const satisfies UserData,
+        }))
+        .toArray()
+    writeArray(usersForCytoscape, AVAILABLE_NODE_TYPES.USER.filename, preparedDataDir)
 }
 
-function prepareComponents(): void {
-    const preparedComponents = readMap<Data.ComponentFile>('components.json', dataDir).values()
+function createComponentNodes(): void {
+    const preparedComponents = components.values()
         .map<ElementDefinition>((component) => ({
             group: 'nodes',
             data: {
                 type: NODE_TYPE.COMPONENT,
                 ...component,
             }
-        })).toArray()
-    writeArray(preparedComponents, AVAILABLE_NODE_TYPES.COMPONENT.filename, simplifiedDataDir)
-}
-
-function prepareSprints(): void {
-    const simplifiedSprints = sprints.values().map<ElementDefinition>((sprint) => ({
-        group: 'nodes',
-        data: {
-            type: NODE_TYPE.SPRINT,
-            id: sprint.id.toString(),
-            name: sprint.name,
-            goal: sprint.goal,
-        }
-    })).toArray()
-    writeArray(simplifiedSprints, AVAILABLE_NODE_TYPES.SPRINT.filename, simplifiedDataDir)
-}
-
-function prepareIssues(): void {
-    const simplifiedIssues = issues.values()
-        .map<ElementDefinition>((issue) => issueToNode(issue))
+        }))
         .toArray()
-    writeArray(simplifiedIssues, AVAILABLE_NODE_TYPES.ISSUE.filename, simplifiedDataDir)
+    writeArray(preparedComponents, AVAILABLE_NODE_TYPES.COMPONENT.filename, preparedDataDir)
+}
+
+function createSprintNodes(): void {
+    const simplifiedSprints = sprints.values()
+        .map<ElementDefinition>((sprint) => ({
+            group: 'nodes',
+            data: {
+                type: NODE_TYPE.SPRINT,
+                id: sprint.id.toString(),
+            }
+        }))
+        .toArray()
+    writeArray(simplifiedSprints, AVAILABLE_NODE_TYPES.SPRINT.filename, preparedDataDir)
+}
+
+function createIssueNodes(): void {
+    const simplifiedIssues = issues.values()
+        .map<ElementDefinition>((issue) => ({
+            group: 'nodes',
+            data: {
+                type: NODE_TYPE.ISSUE,
+                issue: issue.id,
+                issueType: issue.issuetype,
+            }
+        }))
+        .toArray()
+    writeArray(simplifiedIssues, AVAILABLE_NODE_TYPES.ISSUE.filename, preparedDataDir)
 }
 
 
 /* ****************+
  * EDGES
  *******************/
-function prepareMentions(): void {
+
+function createEdgesForMentions(): void {
     const mentions = readJsonFile<Record<string, CommentMentions>>('commentMentions.json', dataDir)
 
     const mentionPerUser: ElementDefinition[] = []
@@ -206,12 +219,12 @@ function prepareMentions(): void {
     mentionPerUserPerTicket.sort((a, b) => b.data.count - a.data.count)
     mentionPerUserPerComment.sort((a, b) => b.data.count - a.data.count)
 
-    writeArray(mentionPerUser, AVAILABLE_EDGES.MENTION_PER_USER.filename, simplifiedDataDir)
-    writeArray(mentionPerUserPerTicket, AVAILABLE_EDGES.MENTION_PER_TICKET.filename, simplifiedDataDir)
-    writeArray(mentionPerUserPerComment, AVAILABLE_EDGES.MENTION_PER_COMMENT.filename, simplifiedDataDir)
+    writeArray(mentionPerUser, AVAILABLE_EDGES.MENTION_PER_USER.filename, preparedDataDir)
+    writeArray(mentionPerUserPerTicket, AVAILABLE_EDGES.MENTION_PER_TICKET.filename, preparedDataDir)
+    writeArray(mentionPerUserPerComment, AVAILABLE_EDGES.MENTION_PER_COMMENT.filename, preparedDataDir)
 }
 
-function prepareEdgesSprintIssue(): void {
+function createEdgesSprintIssues(): void {
     const sprintIssueEdges = issues.values().flatMap((issue) => (issue.sprints || []).map((sprint) => ({
         group: 'edges',
         data: {
@@ -221,10 +234,10 @@ function prepareEdgesSprintIssue(): void {
             target: issue.id,
         }
     }))).filter(Boolean).toArray()
-    writeArray(sprintIssueEdges, AVAILABLE_EDGES.SPRINT_ISSUE.filename, simplifiedDataDir)
+    writeArray(sprintIssueEdges, AVAILABLE_EDGES.SPRINT_ISSUE.filename, preparedDataDir)
 }
 
-function prepareEdgesUserIssue(): void {
+function createEdgesUserIssue(): void {
     const userIssue = issues.values().flatMap<ElementDefinition>((issue) =>
         issue.assignedUsersUnique?.map((user) => ({
             group: 'edges',
@@ -235,10 +248,10 @@ function prepareEdgesUserIssue(): void {
                 target: user,
             }
         }))).filter(Boolean).toArray()
-    writeArray(userIssue, AVAILABLE_EDGES.USER_ISSUE.filename, simplifiedDataDir)
+    writeArray(userIssue, AVAILABLE_EDGES.USER_ISSUE.filename, preparedDataDir)
 }
 
-function prepareIssueLinks(): void {
+function createEdgesIssueLinks(): void {
     const issueLinkTypes = readMap<Data.IssueLinkTypeFile>('issueLinkTypes.json', dataDir)
     const issueLinks = readMap<Data.IssueLinkFile>('links.json', dataDir).values()
         .filter((link) => link.inwardIssue && link.outwardIssue && issues.has(link.inwardIssue.id) && issues.has(link.outwardIssue.id))
@@ -252,7 +265,7 @@ function prepareIssueLinks(): void {
                 linkType: issueLinkTypes.get(link.type)?.name,
             }
         })).toArray()
-    writeArray(issueLinks, AVAILABLE_EDGES.ISSUE_LINK.filename, simplifiedDataDir)
+    writeArray(issueLinks, AVAILABLE_EDGES.ISSUE_LINK.filename, preparedDataDir)
 }
 
 
@@ -348,8 +361,7 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 sprintNumber: sprint?.number,
                 name: sprint?.number.toString() || sprint?.name || 'no-sprint',
                 issues: station.issues.map((issue) => {
-                    const {changelog, comments, ...rest} = issue
-                    return {...rest}
+                    return issue.id
                 }),
                 // it would be more precise to check the date of the mention/assignment and check that against the sprint
                 assignedUsers: unique(station.issues.flatMap((issue) => issue.assignedUsersUnique ?? [])),
@@ -521,7 +533,7 @@ function createNetwork(): void {
                 type: 'intersection',
                 lines: entry.lines.values().toArray(),
                 issues: entry.issues.values()
-                    .map((issue) => simplifyIssue(issue))
+                    .map((issue) => issue.id)
                     .toArray(),
                 children: entry.nodes.values().map((node) => node.data.id).toArray(),
             }
@@ -530,10 +542,10 @@ function createNetwork(): void {
             node.data.parent = nodeId
         }
     }
-    writeArray(intersectionNodes, 'intersections', simplifiedDataDir)
+    writeArray(intersectionNodes, 'intersections', preparedDataDir)
 
     for (const [area, elements] of lines) {
-        writeArray(elements, `lines/${normalizeFilename(area)}`, simplifiedDataDir)
+        writeArray(elements, `lines/${normalizeFilename(area)}`, preparedDataDir)
     }
 
     const predefinedColors = readArray('colors.json', additionalDataDir)
@@ -553,24 +565,27 @@ function createNetwork(): void {
             }
         })
         .sort((a, b) => a.name.localeCompare(b.name))
-    writeArray(areasWithLines, 'lines', simplifiedDataDir)
+    writeArray(areasWithLines, 'lines', preparedDataDir)
 }
 
 function prepareData(): void {
     // apply Meta-Data
     applyMetaData()
 
+    // "raw" data
+    writeRawData()
+
     // Nodes
-    prepareUsers()
-    prepareComponents()
-    prepareSprints()
-    prepareIssues()
+    createUserNodes()
+    createComponentNodes()
+    createSprintNodes()
+    createIssueNodes()
 
     // Edges
-    prepareMentions()
-    prepareEdgesSprintIssue()
-    prepareEdgesUserIssue()
-    prepareIssueLinks()
+    createEdgesForMentions()
+    createEdgesSprintIssues()
+    createEdgesUserIssue()
+    createEdgesIssueLinks()
 
     // Transport lines
     createNetwork()

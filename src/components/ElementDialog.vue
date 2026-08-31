@@ -12,13 +12,11 @@
                 <dt>{{ key }}</dt>
                 <dd>
                     <template v-if="key === 'issues'">
-                        <article v-for="issue in value" :key="issue.key">
-                            <h1>{{ issue.key }}: {{ issue.summary }}</h1>
-                            <pre>
-                                {{ issue.description }}
-                            </pre>
-                            <pre>{{ restIssueFields(issue) }}</pre>
-                        </article>
+                        <issue-display
+                            v-for="issueId in value"
+                            :id="issueId"
+                            :key="issueId"
+                        />
                     </template>
                     <template v-else>
                         {{ value }}
@@ -33,15 +31,10 @@
 import type {ElementDefinition} from 'cytoscape'
 import {ref, useTemplateRef} from 'vue'
 
-import type {Data} from '../../types/data'
+import IssueDisplay from './IssueDisplay.vue'
 
 const dialog = useTemplateRef('dialog')
 const selectedItem = ref<ElementDefinition>()
-
-function restIssueFields(issue: Data.Issue): string {
-    const {key, summary, description, assignee, assignedUsers, mentionedUsers, lastViewed, ...rest} = issue
-    return JSON.stringify(rest, undefined, 2)
-}
 
 function showPopover(item: ElementDefinition) {
     selectedItem.value = item

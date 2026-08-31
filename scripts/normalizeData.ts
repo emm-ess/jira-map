@@ -402,6 +402,7 @@ function fixMentionedUsers() {
         issue.comments.forEach((comment) => {
             comment.mentionedUsers = traverseUser(comment.mentionedUsers)
         })
+        issue.mentionedUsersUnique = traverseUser(issue.mentionedUsersUnique)
     })
 }
 

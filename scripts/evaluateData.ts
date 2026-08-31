@@ -1,5 +1,5 @@
 import type {Data} from '../types/data.ts'
-import {readArray, writeMap} from './util.ts'
+import {readArray, readMap, writeMap} from './util.ts'
 
 // const user = readMap<Data.User>('users.json')
 // const sprints = readMap<Data.Sprint>('sprints.json')
@@ -8,7 +8,7 @@ import {readArray, writeMap} from './util.ts'
 // const links = readMap<Data.IssueLink>('links.json')
 // const statuses = readMap<Data.Status>('statuses.json')
 // const issueType = readMap<Data.IssueType>('types.json')
-const issues  = readArray<Data.Issue>('issues.json')
+const issues  = readMap<Map<string, Data.Issue>>('issues.json')
 
 export type CommentMentions = {
     [issueKey: string]: Array<{
@@ -21,7 +21,7 @@ export type CommentMentions = {
 function detectCommentPings(): void {
     const pings = new Map<string, CommentMentions>()
 
-    for (const issue of issues) {
+    for (const issue of issues.values()) {
         for (const comment of issue.comments) {
             if (comment.mentionedUsers.length > 0) {
                 const issueKey = issue.key
