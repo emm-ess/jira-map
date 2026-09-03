@@ -1,6 +1,6 @@
 import type {ElementDefinition} from 'cytoscape'
 
-import type {DataPrepared} from '../types/data-prepared'
+import type {DataPrepared} from '../../types/data-prepared'
 import {AreaGraph} from './areaGraph'
 
 export type StationNode = ElementDefinition & {

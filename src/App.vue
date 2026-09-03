@@ -29,14 +29,13 @@
 import cytoscape, {type EventObject} from 'cytoscape'
 import {nextTick, onMounted, ref, useTemplateRef, watch} from 'vue'
 
-import BaseSelect from '@/components/BaseSelect.vue'
-import ElementDialog from '@/components/ElementDialog.vue'
-import MapData from '@/components/MapData.vue'
-import MapImexports from '@/components/MapImexports.vue'
-import {cytoscopeStyle} from '@/cytoscopeStyle.ts'
-import {getIntersectionRestrictions, moveStationsAccordingToRestrictions} from '@/layoutHelper.ts'
-
-import {LAYOUTS} from './layouts.ts'
+import BaseSelect from './components/BaseSelect.vue'
+import ElementDialog from './components/ElementDialog.vue'
+import MapData from './components/MapData.vue'
+import MapImexports from './components/MapImexports.vue'
+import {cytoscopeStyle} from './graph/cytoscopeStyle.ts'
+import {getIntersectionRestrictions, moveStationsAccordingToRestrictions} from './graph/layoutHelper.ts'
+import {LAYOUTS} from './graph/layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
 const dialog = useTemplateRef('dialog')

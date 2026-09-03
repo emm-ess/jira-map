@@ -1,7 +1,7 @@
 import type {Collection, LayoutEventObject, Position} from 'cytoscape'
 import type {FcoseLayoutOptions} from 'cytoscape-fcose'
 
-import {canonicalizeDirection, nearestDirection} from '@/layoutHelper.ts'
+import {canonicalizeDirection, nearestDirection} from './layoutHelper.ts'
 
 /*
  * Schematic line-map layout

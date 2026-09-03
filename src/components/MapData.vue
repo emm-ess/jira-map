@@ -102,8 +102,6 @@
 import type {Core, NodeSingular} from 'cytoscape'
 import {ref, watch} from 'vue'
 
-import BaseCheckbox from '@/components/BaseCheckbox.vue'
-import FormFieldset from '@/components/FormFieldset.vue'
 import {AVAILABLE_LINES, intersections, loadData, user} from '@/data.ts'
 
 import {
@@ -113,6 +111,8 @@ import {
     type EdgeType,
     type NodeSelection,
 } from '../../scripts/const.ts'
+import BaseCheckbox from './BaseCheckbox.vue'
+import FormFieldset from './FormFieldset.vue'
 
 const {cy} = defineProps<{
     cy: Core

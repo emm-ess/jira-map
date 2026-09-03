@@ -1,7 +1,7 @@
 import type {CytoscapeOptions} from 'cytoscape'
 
-import {EDGE_TYPE, NODE_TYPE} from '../scripts/const.ts'
-import {AVAILABLE_LINES} from './data.ts'
+import {EDGE_TYPE, NODE_TYPE} from '../../scripts/const.ts'
+import {AVAILABLE_LINES} from '../data.ts'
 
 // gray active #727782
 // gray unused #EDEEF0

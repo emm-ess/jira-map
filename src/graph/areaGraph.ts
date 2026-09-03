@@ -1,4 +1,4 @@
-import rawData from '../data-additional/areaMeta.json' with {type: 'json'}
+import rawData from '../../data-additional/areaMeta.json' with {type: 'json'}
 
 function unique<T>(values: T[]): T[] {
     return [...new Set(values)].filter(Boolean)
