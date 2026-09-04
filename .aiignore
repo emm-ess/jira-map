@@ -1,0 +1,12 @@
+data/
+data-additional/
+data-prepared/
+data-raw/
+data-test/
+dist/
+node_modules/
+manualFixes.csv
+*.zip
+.notes
+.env
+.husky/

@@ -6,6 +6,10 @@ data-*/
 data
 *.zip
 manualFixes.csv
+.wolf
+.claude
+.codex
+.cursor
 
 # Project
 ###########################
