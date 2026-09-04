@@ -2,14 +2,14 @@ import type {DataRaw} from './data-raw'
 
 declare namespace Data {
     // User
-    //------------------
+    // ------------------
     export type User = Pick<DataRaw.User, 'key' | 'avatarUrls' | 'displayName' | 'name'>
 
     /** key is field `key` of user */
     export type UserFile = Map<string, User>
 
     // Sprint
-    //------------------
+    // ------------------
     export type Sprint = {
         id: number
         number: number
@@ -28,14 +28,14 @@ declare namespace Data {
     export type SprintFile = Map<number, Sprint>
 
     // Components
-    //------------------
+    // ------------------
     export type Component = Omit<DataRaw.ProjectComponent, 'self'>
 
     /** id is field `id` of Component */
     export type ComponentFile = Map<string, Component>
 
     // IssueLink
-    //------------------
+    // ------------------
     export type LinkedIssue = {
         /** The ID of the issue. */
         id: string;
@@ -60,7 +60,7 @@ declare namespace Data {
     export type IssueLinkFile = Map<string, IssueLink>
 
     // Issue-Status
-    //------------------
+    // ------------------
     export type StatusCategory = Omit<DataRaw.StatusCategory, 'self'>
     export type Status = Omit<DataRaw.Status, 'self' | 'iconUrl' | 'statusCategory'> & {
         statusCategory: StatusCategory
@@ -70,14 +70,14 @@ declare namespace Data {
     export type StatusFile = Map<string, Status>
 
     // Issue-Type
-    //------------------
+    // ------------------
     export type IssueType = Pick<DataRaw.IssueType, 'id' | 'name' | 'subtask'>
 
     /** id is field `id` of IssueType */
     export type IssueTypeFile = Map<string, IssueType>
 
     // Issue
-    //------------------
+    // ------------------
     export type Comment = Omit<DataRaw.Comment, 'self' | 'author' | 'updateAuthor'> & {
         /** The key of the user */
         author: string

@@ -35,7 +35,7 @@ export class AreaGraph {
         return getRoots(key, new Set())
     }
 
-    getParentNodes(key: string): string[] | void {
+    getParentNodes(key: string): string[] | undefined {
         return this.data.get(key)
     }
 

@@ -1,4 +1,5 @@
-import fs, {Dirent} from 'node:fs'
+import type {Dirent} from 'node:fs'
+import fs from 'node:fs'
 import path from 'node:path'
 
 export const rawDataDir = path.resolve(import.meta.dirname, '../data-raw')
@@ -11,20 +12,21 @@ export function getJsonFilesOfDirectory(): Dirent[] {
         .filter((dirent) => dirent.isFile() && dirent.name.endsWith('.json'))
 }
 
-export function readJsonFile<T extends {}>(fileName: string, dir = rawDataDir): T {
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
+export function readJsonFile<T extends object>(fileName: string, dir = rawDataDir): T {
     const file = path.resolve(dir, fileName)
     return fs.existsSync(file)
-        ? JSON.parse(fs.readFileSync(file, 'utf-8'))
-        : {}
+        ? JSON.parse(fs.readFileSync(file, 'utf8'))
+        : {} as T
 }
 
-export function readMap<T extends Map<string | number, unknown>>(filename: string, dir = dataDir, keyToNumber = false): T {
-    const data = readJsonFile<Record<string | number, T>>(filename, dir)
+export function readMap<Key extends string | number, Value>(filename: string, dir = dataDir, keyToNumber = false): Map<Key, Value> {
+    const data = readJsonFile<Record<Key, Value>>(filename, dir)
     const entries = keyToNumber
         ? Object.entries(data).map(([k, v]) => [Number(k), v])
         : Object.entries(data)
-    // @ts-ignore
-    return new Map(entries) as T
+    // @ts-expect-error just for now
+    return new Map<Key, Value>(entries)
 }
 
 export function readArray<T>(filename: string, dir = dataDir): T[] {
@@ -39,13 +41,13 @@ function ensureDir(filename: string): void {
 export function writeMap(data: Map<string | number, unknown>, name: string, dir = dataDir) {
     const file = path.resolve(dir, `${name}.json`)
     ensureDir(file)
-    fs.writeFileSync(file, JSON.stringify(Object.fromEntries(data), null, 2))
+    fs.writeFileSync(file, JSON.stringify(Object.fromEntries(data), undefined, 2))
 }
 
 export function writeArray(data: unknown[], name: string, dir = dataDir) {
     const file = path.resolve(dir, `${name}.json`)
     ensureDir(file)
-    fs.writeFileSync(file, JSON.stringify(data, null, 2))
+    fs.writeFileSync(file, JSON.stringify(data, undefined, 2))
 }
 
 export function unique<T>(values: T[]): T[] {

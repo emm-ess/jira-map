@@ -115,7 +115,7 @@ export declare namespace DataRaw {
     }
 
     /** Details about a project component. */
-    export interface ProjectComponent {
+    export type ProjectComponent = {
         /** The unique identifier for the component. */
         id: string;
         /**

@@ -1,5 +1,5 @@
 import type {Data} from '../types/data.ts'
-import {readArray, readMap, writeMap} from './util.ts'
+import {readMap, writeMap} from './util.ts'
 
 // const user = readMap<Data.User>('users.json')
 // const sprints = readMap<Data.Sprint>('sprints.json')
@@ -8,15 +8,13 @@ import {readArray, readMap, writeMap} from './util.ts'
 // const links = readMap<Data.IssueLink>('links.json')
 // const statuses = readMap<Data.Status>('statuses.json')
 // const issueType = readMap<Data.IssueType>('types.json')
-const issues  = readMap<Map<string, Data.Issue>>('issues.json')
+const issues  = readMap<string, Data.Issue>('issues.json')
 
-export type CommentMentions = {
-    [issueKey: string]: Array<{
-        /** id of comment */
-        comment: string
-        mentionedUsers: string[]
-    }>
-}
+export type CommentMentions = Record<string, {
+    /** id of comment */
+    comment: string
+    mentionedUsers: string[]
+}[]>
 
 function detectCommentPings(): void {
     const pings = new Map<string, CommentMentions>()
@@ -29,13 +27,15 @@ function detectCommentPings(): void {
                 if (!pings.has(author)) {
                     pings.set(author, {})
                 }
+
                 const ping = pings.get(author)!
+
                 if (!ping[issueKey]) {
                     ping[issueKey] = []
                 }
                 ping[issueKey].push({
                     comment: comment.id,
-                    mentionedUsers: comment.mentionedUsers
+                    mentionedUsers: comment.mentionedUsers,
                 })
             }
         }

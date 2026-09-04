@@ -4,6 +4,19 @@ export namespace DataPrepared {
     export type StationId = `${string}-station-${number}`
     export type LineId = `${string}-segment-${number}`
 
+    export type IntersectionElement = {
+        group: 'nodes'
+        data: IntersectionData
+    }
+
+    export type IntersectionData = {
+        type: 'intersection'
+        id: string
+        lines: string[]
+        issues: string[]
+        children: string[]
+    }
+
     export type Station = {
         type: 'station'
         future: boolean
@@ -32,5 +45,13 @@ export namespace DataPrepared {
 
     export type Issue = Omit<Data.Issue, 'changelog'> & {
         area?: string[]
+    }
+
+    export type LineInfo = {
+        name: string
+        handPickedColor: boolean
+        filename: string
+        colorNormal: string
+        colorUnused: string
     }
 }

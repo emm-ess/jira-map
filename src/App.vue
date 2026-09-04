@@ -17,7 +17,7 @@
                 add intersection hack
             </button>
 
-            <map-data ref="mapData" :cy />
+            <map-data ref="mapDataRef" :cy />
             <map-imexports :cy />
         </form>
     </main>
@@ -39,7 +39,7 @@ import {LAYOUTS} from './graph/layouts.ts'
 
 const cyEle = useTemplateRef('cyEle')
 const dialog = useTemplateRef('dialog')
-const mapData = useTemplateRef('mapData')
+const mapDataRef = useTemplateRef('mapDataRef')
 
 const layout = ref(LAYOUTS[1])
 const cyMounted = ref(false)
@@ -56,7 +56,7 @@ onMounted(async () => {
     cyMounted.value = true
     await nextTick()
     // cy.add(intersections)
-    await mapData.value?.updateLines()
+    await mapDataRef.value?.updateLines()
     // await updateNodes()
     // await updateEdges()
     updateLayout()
@@ -71,6 +71,7 @@ async function updateLayout() {
     for (const intersection of cy.nodes('[type="intersection"]')) {
         if (intersection.children().length < 2) {
             intersection.children().move({
+                // eslint-disable-next-line unicorn/no-null
                 parent: null,
             })
             intersection.remove()

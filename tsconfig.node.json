@@ -3,10 +3,14 @@
         "@tsconfig/node24/tsconfig.json"
     ],
     "include": [
-        "scripts/**/*"
+        "**/*.ts",
+    ],
+    "exclude": [
+        "src/**/*.*",
     ],
     "compilerOptions": {
         "types": ["node"],
-        "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo"
+        "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+        "allowImportingTsExtensions": true
     }
 }

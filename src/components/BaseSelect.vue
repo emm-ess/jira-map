@@ -7,13 +7,13 @@
         v-model="model"
         :name="id"
     >
-            <option
-                v-for="item in items"
-                :key="item.name"
-                :value="item"
-            >
-                {{ item.name }}
-            </option>
+        <option
+            v-for="item in items"
+            :key="item.name"
+            :value="item"
+        >
+            {{ item.name }}
+        </option>
     </select>
 </template>
 

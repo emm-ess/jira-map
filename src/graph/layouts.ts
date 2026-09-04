@@ -1,3 +1,14 @@
+import type {
+    BreadthFirstLayoutOptions,
+    CircleLayoutOptions, ConcentricLayoutOptions, CoseLayoutOptions,
+    GridLayoutOptions, LayoutOptions,
+    NodeSingular,
+    PresetLayoutOptions,
+    RandomLayoutOptions,
+} from 'cytoscape'
+import type {EulerLayoutOptions} from 'cytoscape-euler'
+import type {FcoseLayoutOptions} from 'cytoscape-fcose'
+
 import {customElk, customFCose} from './customLayout'
 
 const random = {
@@ -9,11 +20,14 @@ const random = {
     animate: false, // whether to transition the node positions
     animationDuration: 500, // duration of animation in ms if enabled
     animationEasing: undefined, // easing of animation if enabled
-    animateFilter: function(node, i) { return true }, // a function that determines whether the node should be animated.  All nodes animated by default on animate enabled.  Non-animated nodes are positioned immediately when the layout starts
+    animateFilter: function(node, i) { return true }, // a function that determines whether the
+    // node
+    // should be
+    // animated.  All nodes animated by default on animate enabled.  Non-animated nodes are positioned immediately when the layout starts
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-}
+} as const satisfies RandomLayoutOptions
 
 const preset = {
     name: 'preset',
@@ -31,7 +45,7 @@ const preset = {
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-}
+} as const satisfies PresetLayoutOptions
 
 const grid = {
     name: 'grid',
@@ -55,7 +69,7 @@ const grid = {
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-}
+} as const satisfies GridLayoutOptions
 
 const circle = {
     name: 'circle',
@@ -78,8 +92,7 @@ const circle = {
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-
-}
+} as const satisfies CircleLayoutOptions
 
 const concentric = {
     name: 'concentric',
@@ -110,7 +123,7 @@ const concentric = {
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-}
+} as const satisfies ConcentricLayoutOptions
 
 const breadthfirst = {
     name: 'breadthfirst',
@@ -134,7 +147,7 @@ const breadthfirst = {
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-}
+} as const satisfies BreadthFirstLayoutOptions
 
 const cose = {
     name: 'cose',
@@ -216,7 +229,7 @@ const cose = {
 
     // Lower temperature threshold (below this point the layout will end)
     minTemp: 1,
-}
+} as const satisfies CoseLayoutOptions
 
 const fcose = {
     name: 'fcose',
@@ -310,7 +323,7 @@ const fcose = {
     /* layout event callbacks */
     ready: () => {}, // on layoutready
     stop: () => {}, // on layoutstop
-}
+} as const satisfies FcoseLayoutOptions
 
 const cola = {
     name: 'cola',
@@ -333,7 +346,7 @@ const cola = {
     avoidOverlap: true, // if true, prevents overlap of node bounding boxes
     handleDisconnected: true, // if true, avoids disconnected components from overlapping
     convergenceThreshold: 0.01, // when the alpha value (system energy) falls below this value, the layout stops
-    nodeSpacing: function(node) { return 10 }, // extra spacing around nodes
+    nodeSpacing: function(node: NodeSingular) { return 10 }, // extra spacing around nodes
     flow: undefined, // use DAG/tree flow layout if specified, e.g. { axis: 'y', minSeparation: 30 }
     alignment: undefined, // relative alignment constraints on nodes, e.g. {vertical: [[{node: node1, offset: 0}, {node: node2, offset: 5}]], horizontal: [[{node: node3}, {node: node4}], [{node: node5}, {node: node6}]]}
     gapInequalities: undefined, // list of inequality constraints for the gap between the nodes, e.g. [{"axis":"y", "left":node1, "right":node2, "gap":25}]
@@ -349,7 +362,7 @@ const cola = {
     unconstrIter: undefined, // unconstrained initial layout iterations
     userConstIter: undefined, // initial layout iterations with user-specified constraints
     allConstIter: undefined, // initial layout iterations with all constraints including non-overlap
-}
+} as const satisfies LayoutOptions
 
 const dagre = {
     name: 'dagre',
@@ -402,7 +415,7 @@ const dagre = {
         'edge-distances': 'intersection',
         'edge-ends-overlap': false,
     },
-}
+} as const satisfies LayoutOptions
 
 const elk = {
     name: 'elk',
@@ -432,8 +445,10 @@ const elk = {
         algorithm: 'layered',
         'elk.direction': 'DOWN',
     },
-    priority: function(edge) { return null }, // Edges with a non-nil value are skipped when geedy edge cycle breaking is enabled
-}
+    // Edges with a non-nil value are skipped when geedy edge cycle breaking
+    priority: function(edge) {},
+    // is enabled
+} as const satisfies LayoutOptions
 
 const euler = {
     name: 'euler',
@@ -527,7 +542,7 @@ const euler = {
     // true : Use random positions within the bounding box
     // false : Use the current node positions as the initial positions
     randomize: false,
-}
+} as const satisfies EulerLayoutOptions
 
 export const LAYOUTS = [
     {name: 'custom elk', layout: customElk},

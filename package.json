@@ -1,58 +1,63 @@
 {
   "name": "jira-map",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "husky",
-    "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "lint": "npm-run-all -p lint:*",
-    "lint:scripts": "eslint . --fix",
-    "lint:package-json": "sort-package-json package.json",
-    "type-check": "tsc --noEmit",
     "data": "npm-run-all -s data:normalize data:evaluate data:prepare",
     "data:additional": "node scripts/inquirerAdditionalMeta.ts",
-    "data:normalize": "node scripts/normalizeData.ts",
     "data:evaluate": "node scripts/evaluateData.ts",
-    "data:prepare": "node scripts/prepareData.ts"
+    "data:normalize": "node scripts/normalizeData.ts",
+    "data:prepare": "node scripts/prepareData.ts",
+    "dev": "vite",
+    "lint": "npm-run-all -p lint:*",
+    "lint:package-json": "sort-package-json package.json",
+    "lint:scripts": "eslint . --fix --cache",
+    "prepare": "husky",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit"
   },
+  "commitlint": {
+    "extends": "@commitlint/config-conventional"
+  },
+  "browserslist": [
+    "last 2 chrome versions",
+    "last 2 firefox versions"
+  ],
   "dependencies": {
-    "@inquirer/prompts": "^8.5.2",
-    "cytoscape": "^3.34.0",
+    "@inquirer/prompts": "^8.7.1",
+    "cytoscape": "^3.34.2",
     "cytoscape-cola": "^2.5.1",
-    "cytoscape-dagre": "^4.0.0",
+    "cytoscape-dagre": "^4.0.1",
     "cytoscape-elk": "^2.3.0",
     "cytoscape-euler": "^1.2.4",
     "cytoscape-fcose": "^2.2.0",
     "cytoscape-layout-utilities": "^1.1.1",
     "cytoscape-svg": "^0.4.0",
-    "vue": "^3.5.38"
+    "vue": "^3.5.42"
   },
   "devDependencies": {
-    "@commitlint/cli": "~21.2.1",
-    "@commitlint/config-conventional": "~21.2.0",
+    "@commitlint/cli": "~21.2.2",
+    "@commitlint/config-conventional": "~21.2.2",
     "@emm-ess-configs/eslint-config": "^0.4.0",
     "@emm-ess-configs/eslint-config-vue": "^0.4.1",
-    "@tsconfig/node24": "^24.0.4",
+    "@tsconfig/node24": "^24.0.5",
     "@tsconfig/strictest": "^2.0.8",
+    "@types/cytoscape-euler": "^1.2.4",
     "@types/cytoscape-fcose": "^2.2.5",
     "@types/node": "^24.1.0",
-    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^9.39.5",
     "husky": "~9.1.7",
-    "lint-staged": "~17.2.0",
+    "lint-staged": "~17.4.1",
     "npm-run-all2": "~9.0.3",
-    "sass": "^1.102.0",
+    "sass": "^1.104.0",
     "sort-package-json": "^4.0.0",
     "typescript": "~6.0.3",
-    "vite": "^8.2.0",
-    "vite-plugin-vue-devtools": "^8.1.2",
-    "vue-tsc": "^3.3.5"
-  },
-  "commitlint": {
-    "extends": "@commitlint/config-conventional"
+    "vite": "^8.2.2",
+    "vite-plugin-vue-devtools": "^8.2.1",
+    "vue-tsc": "^3.3.11"
   }
 }

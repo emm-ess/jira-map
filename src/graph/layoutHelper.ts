@@ -47,11 +47,6 @@ function getMainAxisBetweenNodes(nodes: NodeCollection): BaseAxis {
         : BaseAxis.VERTICAL
 }
 
-function getMainAxisOfConnectedNodes(node: NodeSingular): BaseAxis {
-    const collection = cytoscape
-        .collection.add
-}
-
 function getMainAxisOfClosedNeighborhood(node: NodeSingular): BaseAxis {
     const boundingBox = node.closedNeighborhood().boundingBox(BOUNDING_BOX_OPTIONS)
 
@@ -149,7 +144,6 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
             continue
         }
 
-        // eslint-disable-next-line unicorn/no-array-reduce
         const axisGroups = children.reduce((groups, child) => {
             const axis = getMainAxisOfClosedNeighborhood(child)
             groups[axis].push(child)
@@ -214,15 +208,15 @@ export function moveStationsAccordingToRestrictions(cy: cytoscape.Core, restrict
     for (const restriction of restrictions) {
         const {left, right, top, bottom, gap} = restriction
         const horizontal = !!(left && right)
-        const prevNode = cy.getElementById(left || top)[0]
-        const nextNode = cy.getElementById(right || bottom)[0]
+        const prevNode = cy.getElementById(left ?? top)[0]
+        const nextNode = cy.getElementById(right ?? bottom)[0]
 
         const prevPosition = {...prevNode.position()}
         if (horizontal) {
-            prevPosition.x += gap
+            prevPosition.x += gap ?? 0
         }
         else {
-            prevPosition.y += gap
+            prevPosition.y += gap ?? 0
         }
         nextNode.position(prevPosition)
     }

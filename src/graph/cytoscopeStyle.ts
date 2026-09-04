@@ -1,4 +1,4 @@
-import type {CytoscapeOptions} from 'cytoscape'
+import type {StylesheetJson, StylesheetJsonBlock} from 'cytoscape'
 
 import {EDGE_TYPE, NODE_TYPE} from '../../scripts/const.ts'
 import {AVAILABLE_LINES} from '../data.ts'
@@ -36,8 +36,8 @@ const linesStyles = [
             'line-style': 'dashed',
         },
     },
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    ...AVAILABLE_LINES.flatMap<CytoscapeOptions['style'][]>((line) => [{
+
+    ...AVAILABLE_LINES.flatMap<StylesheetJsonBlock>((line) => [{
         selector: `edge[line="${line.name}"]`,
         style: {
             'line-color': line.colorNormal,
@@ -58,7 +58,7 @@ const linesStyles = [
             'outline-color': line.colorUnused,
         },
     }]),
-] as const satisfies CytoscapeOptions['style'][]
+] as const satisfies StylesheetJson
 
 export const cytoscopeStyle = [{
     selector: 'node[type="station"]',
@@ -75,7 +75,7 @@ export const cytoscopeStyle = [{
     selector: 'node[type="intersection"],node[type="intersection-hack"]',
     style: {
         shape: 'round-rectangle',
-        padding: 0,
+        padding: '0',
         'border-width': 0,
         'background-color': '#fff',
         'outline-width': 2,
@@ -139,4 +139,4 @@ export const cytoscopeStyle = [{
     },
 },
 ...linesStyles,
-] as const satisfies CytoscapeOptions['style']
+] as const satisfies StylesheetJson

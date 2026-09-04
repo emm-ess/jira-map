@@ -1,32 +1,31 @@
 import type {ElementDefinition} from 'cytoscape'
+
+import {AreaGraph} from '../src/graph/areaGraph.ts'
+import type {Data} from '../types/data.ts'
 import type {DataAdditional} from '../types/data-additional.d.ts'
 import type {DataPrepared} from '../types/data-prepared.ts'
-import type {Data} from '../types/data.ts'
-import {AreaGraph} from '../src/areaGraph.ts'
 import {AVAILABLE_EDGES, AVAILABLE_NODE_TYPES, EDGE_TYPE, NODE_TYPE} from './const.ts'
 import type {CommentMentions} from './evaluateData.ts'
 import {
     additionalDataDir,
     dataDir,
+    preparedDataDir,
     readArray,
     readJsonFile,
     readMap,
-    preparedDataDir,
     unique,
     writeArray, writeMap,
 } from './util.ts'
 
 // additional user-provided data
-const issueMeta = readMap<DataAdditional.IssueMetaFile>('issueMeta.json', additionalDataDir)
+const issueMeta = readMap<string, DataAdditional.IssueMeta>('issueMeta.json', additionalDataDir)
 
 // exported & normalized data from jira
-const users = readMap<Data.UserFile>('users.json', dataDir)
-const issueTypes = readMap<Data.IssueTypeFile>('types.json', dataDir)
-const sprints = readMap<Data.SprintFile>('sprints.json', dataDir, true)
-const issues = readMap<Data.IssueFile>('issues.json', dataDir)
-const components = readMap<Data.ComponentFile>('components.json', dataDir)
-
-
+const users = readMap<string, Data.User>('users.json', dataDir)
+const issueTypes = readMap<string, Data.IssueType>('types.json', dataDir)
+const sprints = readMap<string, Data.Sprint>('sprints.json', dataDir, true)
+const issues = readMap<string, Data.Issue>('issues.json', dataDir)
+const components = readMap<string, Data.Component>('components.json', dataDir)
 
 function applyMetaData(): void {
     for (const issueId of issues.keys()) {
@@ -35,7 +34,6 @@ function applyMetaData(): void {
         }
     }
 }
-
 
 /* ****************+
  * HElPER
@@ -55,15 +53,15 @@ function normalizeFilename(name: string): string {
 
 function writeIssues(): void {
     const preparedIssues = new Map<string, DataPrepared.Issue>()
-    issues.forEach((issue, id) => {
+    for (const [id, issue] of issues.entries()) {
         const {changelog, ...rest} = issue
         const preparedIssue: DataPrepared.Issue = {
             ...rest,
             area: issueMeta.get(issue.id)?.area,
-            components: issueMeta.get(issue.id)?.components || issue.components,
+            components: issueMeta.get(issue.id)?.components ?? issue.components,
         }
         preparedIssues.set(id, preparedIssue)
-    })
+    }
     writeMap(preparedIssues, 'data/issues', preparedDataDir)
 }
 
@@ -87,7 +85,7 @@ export type UserData = {
 
 function createUserNodes(): void {
     const usersForCytoscape = users.values()
-        .map<ElementDefinition>(user => ({
+        .map<ElementDefinition>((user) => ({
             group: 'nodes',
             data: {
                 type: NODE_TYPE.USER,
@@ -106,7 +104,7 @@ function createComponentNodes(): void {
             data: {
                 type: NODE_TYPE.COMPONENT,
                 ...component,
-            }
+            },
         }))
         .toArray()
     writeArray(preparedComponents, AVAILABLE_NODE_TYPES.COMPONENT.filename, preparedDataDir)
@@ -119,7 +117,7 @@ function createSprintNodes(): void {
             data: {
                 type: NODE_TYPE.SPRINT,
                 id: sprint.id.toString(),
-            }
+            },
         }))
         .toArray()
     writeArray(simplifiedSprints, AVAILABLE_NODE_TYPES.SPRINT.filename, preparedDataDir)
@@ -133,12 +131,11 @@ function createIssueNodes(): void {
                 type: NODE_TYPE.ISSUE,
                 issue: issue.id,
                 issueType: issue.issuetype,
-            }
+            },
         }))
         .toArray()
     writeArray(simplifiedIssues, AVAILABLE_NODE_TYPES.ISSUE.filename, preparedDataDir)
 }
-
 
 /* ****************+
  * EDGES
@@ -153,31 +150,30 @@ function createEdgesForMentions(): void {
     let maxCountPerUserPerTicket = 0
     const mentionPerUserPerComment: ElementDefinition[] = []
 
-    Object.entries(mentions).forEach(([user, issuesPings]) => {
+    for (const [user, issuesPings] of Object.entries(mentions)) {
         const mentionsPerUserCount: Record<string, number> = {}
-        Object.entries(issuesPings).forEach(([issue, comments]) => {
+        for (const [issue, comments] of Object.entries(issuesPings)) {
             const mentionPerUserPerTicketCount: Record<string, number> = {}
-            comments.forEach(comment => {
-                comment.mentionedUsers
-                    .filter(mentionedUser => users.has(mentionedUser))
-                    .forEach(mentionedUser => {
-                        mentionPerUserPerComment.push({
-                            group: 'edges',
-                            data: {
-                                type: EDGE_TYPE.MENTION_PER_COMMENT,
-                                id: `${user}-${issue}-${comment.comment}-${mentionedUser}`,
-                                source: user,
-                                target: mentionedUser,
-                                count: 1,
-                                weight: 1,
-                            }
-                        })
-                        mentionPerUserPerTicketCount[mentionedUser] = (mentionPerUserPerTicketCount[mentionedUser] ?? 0) + 1
-                        mentionsPerUserCount[mentionedUser] = (mentionsPerUserCount[mentionedUser] ?? 0) + 1
-                })
-            })
+            for (const comment of comments) {
+                for (const mentionedUser of comment.mentionedUsers
+                    .filter((mentionedUser) => users.has(mentionedUser))) {
+                    mentionPerUserPerComment.push({
+                        group: 'edges',
+                        data: {
+                            type: EDGE_TYPE.MENTION_PER_COMMENT,
+                            id: `${user}-${issue}-${comment.comment}-${mentionedUser}`,
+                            source: user,
+                            target: mentionedUser,
+                            count: 1,
+                            weight: 1,
+                        },
+                    })
+                    mentionPerUserPerTicketCount[mentionedUser] = (mentionPerUserPerTicketCount[mentionedUser] ?? 0) + 1
+                    mentionsPerUserCount[mentionedUser] = (mentionsPerUserCount[mentionedUser] ?? 0) + 1
+                }
+            }
 
-            Object.entries(mentionPerUserPerTicketCount).forEach(([mentionedUser, count]) => {
+            for (const [mentionedUser, count] of Object.entries(mentionPerUserPerTicketCount)) {
                 mentionPerUserPerTicket.push({
                     group: 'edges',
                     data: {
@@ -186,13 +182,13 @@ function createEdgesForMentions(): void {
                         source: user,
                         target: mentionedUser,
                         count,
-                    }
+                    },
                 })
                 maxCountPerUserPerTicket = Math.max(maxCountPerUserPerTicket, count)
-            })
-        })
+            }
+        }
 
-        Object.entries(mentionsPerUserCount).forEach(([mentionedUser, count]) => {
+        for (const [mentionedUser, count] of Object.entries(mentionsPerUserCount)) {
             mentionPerUser.push({
                 group: 'edges',
                 data: {
@@ -201,19 +197,19 @@ function createEdgesForMentions(): void {
                     source: user,
                     target: mentionedUser,
                     count,
-                }
+                },
             })
             maxCountPerUser = Math.max(maxCountPerUser, count)
-        })
-    })
+        }
+    }
 
     // normalize
-    mentionPerUser.forEach((item) => {
+    for (const item of mentionPerUser) {
         item.data.weight = item.data.count / maxCountPerUser
-    })
-    mentionPerUserPerTicket.forEach((item) => {
+    }
+    for (const item of mentionPerUserPerTicket) {
         item.data.weight = item.data.count / maxCountPerUserPerTicket
-    })
+    }
 
     mentionPerUser.sort((a, b) => b.data.count - a.data.count)
     mentionPerUserPerTicket.sort((a, b) => b.data.count - a.data.count)
@@ -225,14 +221,14 @@ function createEdgesForMentions(): void {
 }
 
 function createEdgesSprintIssues(): void {
-    const sprintIssueEdges = issues.values().flatMap((issue) => (issue.sprints || []).map((sprint) => ({
+    const sprintIssueEdges = issues.values().flatMap((issue) => (issue.sprints ?? []).map((sprint) => ({
         group: 'edges',
         data: {
             type: EDGE_TYPE.SPRINT_ISSUE,
             id: `${sprint}-${issue.id}`,
             source: sprint.toString(),
             target: issue.id,
-        }
+        },
     }))).filter(Boolean).toArray()
     writeArray(sprintIssueEdges, AVAILABLE_EDGES.SPRINT_ISSUE.filename, preparedDataDir)
 }
@@ -246,14 +242,14 @@ function createEdgesUserIssue(): void {
                 id: `${user}-${issue.id}`,
                 source: issue.id,
                 target: user,
-            }
+            },
         }))).filter(Boolean).toArray()
     writeArray(userIssue, AVAILABLE_EDGES.USER_ISSUE.filename, preparedDataDir)
 }
 
 function createEdgesIssueLinks(): void {
-    const issueLinkTypes = readMap<Data.IssueLinkTypeFile>('issueLinkTypes.json', dataDir)
-    const issueLinks = readMap<Data.IssueLinkFile>('links.json', dataDir).values()
+    const issueLinkTypes = readMap<string, Data.IssueLinkType>('issueLinkTypes.json', dataDir)
+    const issueLinks = readMap<string, Data.IssueLink>('links.json', dataDir).values()
         .filter((link) => link.inwardIssue && link.outwardIssue && issues.has(link.inwardIssue.id) && issues.has(link.outwardIssue.id))
         .map((link) => ({
             group: 'edges',
@@ -263,11 +259,10 @@ function createEdgesIssueLinks(): void {
                 source: link.inwardIssue!.id,
                 target: link.outwardIssue!.id,
                 linkType: issueLinkTypes.get(link.type)?.name,
-            }
+            },
         })).toArray()
     writeArray(issueLinks, AVAILABLE_EDGES.ISSUE_LINK.filename, preparedDataDir)
 }
-
 
 /* ****************+
  * Transport-Lines
@@ -295,17 +290,16 @@ function createTransportGroups(): Map<string, Data.Issue[]> {
     const areaGraph = new AreaGraph()
     const transportGroups = new Map<string, Data.Issue[]>()
 
-    issues.values()
-        .filter((issue) => issueMeta.get(issue.id)?.area)
-        .forEach((issue) => {
-            const areas = issueMeta.get(issue.id)?.area ?? []
-            areaGraph.getRootNodes(areas).forEach((area) => {
-                if (!transportGroups.has(area)) {
-                    transportGroups.set(area, [])
-                }
-                transportGroups.get(area)?.push(issue)
-            })
-        })
+    for (const issue of issues.values()
+        .filter((issue) => issueMeta.get(issue.id)?.area)) {
+        const areas = issueMeta.get(issue.id)?.area ?? []
+        for (const area of areaGraph.getRootNodes(areas)) {
+            if (!transportGroups.has(area)) {
+                transportGroups.set(area, [])
+            }
+            transportGroups.get(area)?.push(issue)
+        }
+    }
     return transportGroups
 }
 
@@ -343,7 +337,6 @@ function addStationNodeToLookupMap(station: Station, stationNode: StationNode): 
 
 function buildLine(area: string, stations: Station[]): ElementDefinition[] {
     let lastSprintNumber: undefined | number
-    // @ts-expect-error
     return stations.flatMap((station, index, array) => {
         const sprintId = station.sprintId
         const sprint = sprints.get(station.sprintId)
@@ -359,14 +352,14 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                 id: stationId,
                 sprintId,
                 sprintNumber: sprint?.number,
-                name: sprint?.number.toString() || sprint?.name || 'no-sprint',
+                name: sprint?.number?.toString() ?? sprint?.name ?? 'no-sprint',
                 issues: station.issues.map((issue) => {
                     return issue.id
                 }),
                 // it would be more precise to check the date of the mention/assignment and check that against the sprint
-                assignedUsers: unique(station.issues.flatMap((issue) => issue.assignedUsersUnique ?? [])),
-                mentionedUsers: unique(station.issues.flatMap((issue) => issue.mentionedUsersUnique ?? [])),
-                areas: unique(station.issues.flatMap((issue) => issueMeta.get(issue.id)?.area ?? []))
+                assignedUsers: unique(station.issues.flatMap((issue) => issue.assignedUsersUnique)),
+                mentionedUsers: unique(station.issues.flatMap((issue) => issue.mentionedUsersUnique)),
+                areas: unique(station.issues.flatMap((issue) => issueMeta.get(issue.id)?.area ?? [])),
             },
         }
         addStationNodeToLookupMap(station, stationNode)
@@ -383,13 +376,13 @@ function buildLine(area: string, stations: Station[]): ElementDefinition[] {
                     target: stationId,
                     distance: sprint?.number && lastSprintNumber
                         ? sprint.number - lastSprintNumber
-                        : 0
+                        : 0,
                 } satisfies DataPrepared.LineSegment,
             }
             : undefined
         lastSprintNumber = sprint?.number
         return [lineSegment, stationNode]
-    }).filter(Boolean)
+    }).filter((item): item is ElementDefinition => !!item)
 }
 
 function createTransportLines(): Lines {
@@ -404,27 +397,27 @@ function createTransportLines(): Lines {
             return multipleSprints
         })
         .map<[area: string, ElementDefinition[]]>(([area, areaIssues]) => {
-        // Group issues by sprint. An issue can occur in more than one stop.
-        const issuesBySprint = new Map<number, Data.Issue[]>()
-        areaIssues.forEach((issue) => {
-            const issueSprints = issue.sprints?.length
-                ? issue.sprints.map((sprintId) => {
-                    return !!sprints.get(sprintId)?.startDate
-                        ? sprintId
-                        : notYetDoneSprint
+            // Group issues by sprint. An issue can occur in more than one stop.
+            const issuesBySprint = new Map<number, Data.Issue[]>()
+            areaIssues.forEach((issue) => {
+                const issueSprints = issue.sprints?.length
+                    ? issue.sprints.map((sprintId) => {
+                        return sprints.get(sprintId)?.startDate
+                            ? sprintId
+                            : notYetDoneSprint
+                    })
+                    : [notYetDoneSprint]
+                issueSprints.forEach((sprintId) => {
+                    const sprintIssues = issuesBySprint.get(sprintId) ?? []
+                    sprintIssues.push(issue)
+                    issuesBySprint.set(sprintId, sprintIssues)
                 })
-                : [notYetDoneSprint]
-            issueSprints.forEach((sprintId) => {
-                const sprintIssues = issuesBySprint.get(sprintId) ?? []
-                sprintIssues.push(issue)
-                issuesBySprint.set(sprintId, sprintIssues)
             })
-        })
 
-        const stations = getSortedSprintIds(issuesBySprint)
-            .map((sprintId) => ({sprintId, issues: issuesBySprint.get(sprintId) ?? []}))
-        return [area, buildLine(area, stations)]
-    }))
+            const stations = getSortedSprintIds(issuesBySprint)
+                .map((sprintId) => ({sprintId, issues: issuesBySprint.get(sprintId) ?? []}))
+            return [area, buildLine(area, stations)]
+        }))
 }
 
 type IntersectionEntry = {
@@ -454,10 +447,10 @@ function calculateIntersectionsNew() {
             }
             const entry = baseIntersections.get(key)!
             entry.issues.add(issue)
-            stationArray.forEach((stationNode) => {
+            for (const stationNode of stationArray) {
                 entry.lines.add(stationNode.data.line)
                 entry.nodes.add(stationNode)
-            })
+            }
         }
     }
     return baseIntersections
@@ -523,7 +516,7 @@ function createNetwork(): void {
 
     const intersections = calculateIntersectionsNew()
 
-    const intersectionNodes: ElementDefinition[] = []
+    const intersectionNodes: IntersectionElement[] = []
     for (const [id, entry] of intersections.entries()) {
         const nodeId = `intersection-${id}`
         intersectionNodes.push({
@@ -536,7 +529,7 @@ function createNetwork(): void {
                     .map((issue) => issue.id)
                     .toArray(),
                 children: entry.nodes.values().map((node) => node.data.id).toArray(),
-            }
+            },
         })
         for (const node of entry.nodes.values()) {
             node.data.parent = nodeId
@@ -548,20 +541,22 @@ function createNetwork(): void {
         writeArray(elements, `lines/${normalizeFilename(area)}`, preparedDataDir)
     }
 
-    const predefinedColors = readArray('colors.json', additionalDataDir)
+    const predefinedColors = readArray<Record<'normal' | 'unused', string>>('colors.json', additionalDataDir)
 
     const areasWithLines = lines.entries().toArray()
         .sort((a, b) => b[1].length - a[1].length)
-        .map(([name], index) => {
+        .map<DataPrepared.LineInfo>(([name], index) => {
             const handPickedColor = index < predefinedColors.length
-            const predefinedColor = handPickedColor &&  predefinedColors[index]
+            const predefinedColor = handPickedColor
+                ? predefinedColors[index]
+                : undefined
             const hue = Math.floor(Math.random() * 360)
             return {
                 name,
                 handPickedColor,
                 filename: `lines/${normalizeFilename(name)}`,
-                colorNormal: predefinedColor?.normal || `hsl(${hue}, 100%, 50%)`,
-                colorUnused: predefinedColor?.unused || `hsl(${hue}, 70%, 85%)`,
+                colorNormal: predefinedColor?.normal ?? `hsl(${hue}, 100%, 50%)`,
+                colorUnused: predefinedColor?.unused ?? `hsl(${hue}, 70%, 85%)`,
             }
         })
         .sort((a, b) => a.name.localeCompare(b.name))

@@ -11,7 +11,7 @@ export const EDGE_TYPE = {
     MENTION_PER_USER: 'mention_per_user',
     MENTION_PER_TICKET: 'mention_per_ticket',
     MENTION_PER_COMMENT: 'mention_per_comment',
-    SPRINT_ISSUE :'sprint_issue',
+    SPRINT_ISSUE: 'sprint_issue',
     USER_ISSUE: 'user_issue',
     ISSUE_LINK: 'issue_link',
 } as const
@@ -42,7 +42,7 @@ export const AVAILABLE_NODE_TYPES = {
         name: 'Components',
         type: NODE_TYPE.COMPONENT,
         filename: 'nodes/components',
-    }
+    },
 } as const satisfies Record<keyof typeof NODE_TYPE, NodeSelection>
 
 export type EdgeType = (typeof EDGE_TYPE)[keyof typeof EDGE_TYPE]
@@ -90,5 +90,5 @@ export const AVAILABLE_EDGES = {
         type: EDGE_TYPE.ISSUE_LINK,
         filename: 'edges/issueLinks',
         nodes: [NODE_TYPE.ISSUE, NODE_TYPE.ISSUE],
-    }
+    },
 } as const satisfies Record<keyof typeof EDGE_TYPE, EdgeSelection>

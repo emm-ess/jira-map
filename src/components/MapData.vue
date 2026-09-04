@@ -99,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import type {Core, NodeSingular} from 'cytoscape'
+import type {Core, ElementDefinition, NodeSingular} from 'cytoscape'
 import {ref, watch} from 'vue'
 
 import {AVAILABLE_LINES, intersections, loadData, user} from '@/data.ts'
@@ -111,6 +111,7 @@ import {
     type EdgeType,
     type NodeSelection,
 } from '../../scripts/const.ts'
+import type {Data} from '../../types/data'
 import BaseCheckbox from './BaseCheckbox.vue'
 import FormFieldset from './FormFieldset.vue'
 
@@ -124,7 +125,7 @@ const emit = defineEmits<{
 
 // const selectedLines = ref([AVAILABLE_LINES[8], AVAILABLE_LINES[13]])
 const selectedLines = ref(AVAILABLE_LINES.filter((line) => line.handPickedColor))
-const selectedUser = ref<string[]>([])
+const selectedUser = ref<Data.User[]>([])
 const selectedNodes = ref<NodeSelection[]>([]) // [AVAILABLE_NODE_TYPES.USER])
 const selectedEdges = ref<EdgeSelection[]>([]) // [AVAILABLE_EDGES.MENTION_PER_USER])
 
@@ -163,13 +164,13 @@ function updateSprintBounds(): void {
 }
 
 async function updateLines() {
-    // eslint-disable-next-line compat/compat
-    const data = await Promise.all(selectedLines.value.map((nodeType) => loadData(nodeType.filename)))
+    const data = await Promise.all(selectedLines.value.map((nodeType) =>
+        loadData<ElementDefinition[]>(nodeType.filename)))
     const lines = new Set(selectedLines.value.map((line) => line.name))
     const eles = data.flat()
     const stuffToKeep = new Set(eles.map((ele) => ele.data.id))
     const filteredIntersectionNodes = intersections.filter((ele) =>
-        ele.data.lines.filter((line) => lines.has(line)).length > 1)
+        ele.data.lines.filter((line: string) => lines.has(line)).length > 1)
     cy.remove(
         cy.nodes().filter((element) => {
             const data = element.data()
@@ -183,7 +184,7 @@ async function updateLines() {
     cy.add(filteredIntersectionNodes)
     cy.add(eles)
     for (const ele of filteredIntersectionNodes) {
-        const children = ele.data.children.flatMap((childId) => cy.nodes(`[id="${childId}"]`))
+        const children = ele.data.children.flatMap((childId: string) => cy.nodes(`[id="${childId}"]`))
         for (const child of children) {
             child.move({parent: ele.data.id})
         }
@@ -204,7 +205,7 @@ function updateUser() {
     // just take both things. better be safe than sorry.
     const userIdentifier = new Set(selectedUser.value.flatMap((user) => [user.name, user.key]))
     updateMarkedNodes((node) => {
-        return node.data('assignedUsers').some((assignedUser) => userIdentifier.has(assignedUser))
+        return node.data('assignedUsers').some((assignedUser: string) => userIdentifier.has(assignedUser))
     })
 }
 
@@ -250,8 +251,8 @@ async function updateNodes() {
         .map((edge) => edge.type))
     cleanEdges(edgesToKeep)
 
-    // eslint-disable-next-line compat/compat
-    const data = await Promise.all(selectedNodes.value.map((nodeType) => loadData(nodeType.filename)))
+    const data = await Promise.all(selectedNodes.value.map((nodeType) =>
+        loadData<ElementDefinition[]>(nodeType.filename)))
     const nodesToKeep = new Set(selectedNodes.value.map((nodeType) => nodeType.type))
     cy.remove(
         cy.nodes().filter((element) => !nodesToKeep.has(element.data().type)),
@@ -261,8 +262,7 @@ async function updateNodes() {
 }
 
 async function updateEdges() {
-    // eslint-disable-next-line compat/compat
-    const data = await Promise.all(selectedEdges.value.map((edgeType) => loadData(edgeType.filename)))
+    const data = await Promise.all(selectedEdges.value.map((edgeType) => loadData<ElementDefinition[]>(edgeType.filename)))
     const edgesToKeep = new Set(selectedEdges.value.map((edgeType) => edgeType.type))
     cleanEdges(edgesToKeep)
     cy.add(data.flat())

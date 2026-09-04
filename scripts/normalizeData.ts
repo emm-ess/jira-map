@@ -1,12 +1,12 @@
+import type {Data} from '../types/data.ts'
 import type {DataAdditional} from '../types/data-additional.ts'
 import type {DataRaw} from '../types/data-raw.ts'
-import type {Data} from '../types/data.ts'
 import {
+    additionalDataDir,
     getJsonFilesOfDirectory,
     readJsonFile,
-    writeMap,
     readMap,
-    additionalDataDir,
+    writeMap,
 } from './util.ts'
 
 // scrapping the data via this script was planned but the instance doesn't allow it. So it's manually downloaded
@@ -29,50 +29,54 @@ const subtasksMap = new Map<string, string>()
 const subtasksList = new Map<string, Data.Issue>()
 const subtasksLinks = new Map<string, Data.IssueLink>()
 
-const userMeta = readMap<DataAdditional.UserMetaFile>('userMeta.json', additionalDataDir)
+const userMeta = readMap<string, DataAdditional.UserMeta>('userMeta.json', additionalDataDir)
 const userReplacements = new Map<string, string>(
     userMeta.values()
         .filter((entry) => entry.combine && entry.combine.length > 1)
         .flatMap((entry) => {
             const mainKey = entry.combine![0]
             return entry.combine!.slice(1).map((key) => [key, mainKey])
-        })
+        }),
 )
 
-const NUMBER_IN_SPRINT = /Sprint[^0-9]*([0-9]+)[^(]/i
+const NUMBER_IN_SPRINT = /Sprint\D*(\d+)[^(]/i
 function processSprintString(sprintStrings: DataRaw.SprintString[] | null): number[] | undefined {
     if (!sprintStrings?.length) {
         return
     }
 
     return sprintStrings.map((rawSprint) => {
-        const match = rawSprint.match(SPRINT_REGEX)
+        const match = SPRINT_REGEX.exec(rawSprint)
 
-        if (match === null || match.length !== 10) {
+        if (match?.length !== 10) {
             throw new Error(`Invalid sprint string: ${rawSprint}`)
         }
 
-        const id = parseInt(match[5] as string)
-        const name = match[6] as string
-        const number = parseInt(name.match(NUMBER_IN_SPRINT)?.[1] as string)
+        const id = Number.parseInt(match[5])
+        const name = match[6]
 
-        const sprint = {
+        const sprint: Data.Sprint = {
             id,
             name,
-            number,
-            previous: parseInt(match[7] as string),
-            goal: match[4] as string,
-            activatedDate: match[1] as string,
-            completeDate: match[2] as string,
-            endDate: match[3] as string,
-            startDate: match[8] as string,
-            state: match[9] as string,
+            previous: Number.parseInt(match[7]),
+            goal: match[4],
+            activatedDate: match[1],
+            completeDate: match[2],
+            endDate: match[3],
+            startDate: match[8],
+            state: match[9],
         }
 
         for (const key in sprint) {
             if (sprint[key] === '<null>') {
+                // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
                 delete sprint[key]
             }
+        }
+
+        const numberMatch = (NUMBER_IN_SPRINT.exec(name))?.[1]
+        if (numberMatch) {
+            sprint.number = Number.parseInt(numberMatch)
         }
 
         sprints.set(id, sprint)
@@ -192,13 +196,13 @@ function processComment(rawComment: DataRaw.Comment): Data.Comment {
     } as Data.Comment
 }
 
-const fieldsWithUserChange = ['assignee', 'reporter']
+const fieldsWithUserChange = new Set(['assignee', 'reporter'])
 function processHistoryItems(items: DataRaw.IssueChangelogHistoryItem[]): DataRaw.IssueChangelogHistoryItem[] {
     return items.map((item) => {
-        if (fieldsWithUserChange.includes(item.field)) {
+        if (fieldsWithUserChange.has(item.field)) {
             // yes, that's quick and dirty, but good enough for the purpose. We only care for the id anyways
-            item.from = item.from && (userReplacements.get(item.from) || item.from)
-            item.to = item.to && (userReplacements.get(item.to) || item.to)
+            item.from = item.from && (userReplacements.get(item.from) ?? item.from)
+            item.to = item.to && (userReplacements.get(item.to) ?? item.to)
         }
         return item
     })
@@ -215,10 +219,10 @@ function processChangelog(rawChangelog: DataRaw.IssueChangelog): Data.IssueChang
 
 function processAssignedUsers(changelog: Data.IssueChangelogHistory[], currentAssignee?: string): string[] {
     const assignedUsers = changelog.flatMap((history) =>
-        history.items
+        (history.items as DataRaw.IssueChangelogHistoryItem[])
             .filter((item) => item.field === 'assignee')
             .flatMap((item) => [item.from, item.to]),
-        )
+    )
         // since the `to`-user becomes the next `from`-user, we filter those repetitions
         .filter((user, index, array) => {
             return !(!user || (index !== 0 && user !== array[index - 1]))
@@ -231,6 +235,7 @@ function processAssignedUsers(changelog: Data.IssueChangelogHistory[], currentAs
     return assignedUsers
 }
 
+// eslint-disable-next-line sonarjs/super-linear-regex
 const REST_REGEX = /\(Rest[: ]*[^\)]*\)/ig
 function processIssue(issue: DataRaw.Issue): Data.Issue {
     const assignee = processUser(issue.fields.assignee)
@@ -299,10 +304,10 @@ function filterSubtasks(): void {
         issues.delete(subtaskId)
         subtasksList.set(subtaskId, subtask)
 
-        subtask.issuelinks.forEach((linkId) => {
+        for (const linkId of subtask.issuelinks) {
             const link = links.get(linkId)
             if (!link) {
-                return
+                continue
             }
             subtasksLinks.set(linkId, {...link})
 
@@ -325,7 +330,7 @@ function filterSubtasks(): void {
             else if (!parent.issuelinks.includes(linkId)) {
                 parent.issuelinks.push(linkId)
             }
-        })
+        }
 
         parent.comments.push(...subtask.comments.map((comment) => ({
             ...comment,
@@ -359,7 +364,7 @@ function filterPolishingTickets(): void {
 }
 
 function applyIssueMeta(): void {
-    const issueMeta = readMap<{hide?: boolean}>('issueMeta.json', additionalDataDir)
+    const issueMeta = readMap<string, {hide?: boolean}>('issueMeta.json', additionalDataDir)
     for (const [issueId, meta] of issueMeta) {
         if (meta.hide) {
             issues.delete(issueId)
@@ -391,27 +396,27 @@ function fixIssueLinks(linkMap: Map<string, Data.IssueLink>, issueMap: Map<strin
 function fixMentionedUsers() {
     const traversedUsers = new Map(user.values().map((user) => [
         user.name,
-        userReplacements.get(user.key) || user.key,
+        userReplacements.get(user.key) ?? user.key,
     ]))
     function traverseUser(users: string[]): string[] {
-        return users.map((user) => traversedUsers.get(user) || user)
+        return users.map((user) => traversedUsers.get(user) ?? user)
     }
 
     issues.forEach((issue) => {
         issue.mentionedUsers = traverseUser(issue.mentionedUsers)
-        issue.comments.forEach((comment) => {
+        for (const comment of issue.comments) {
             comment.mentionedUsers = traverseUser(comment.mentionedUsers)
-        })
+        }
         issue.mentionedUsersUnique = traverseUser(issue.mentionedUsersUnique)
     })
 }
 
 function fixUser() {
-    user.values().forEach((userEntry) => {
+    for (const userEntry of user.values()) {
         const meta = userMeta.get(userEntry.key)
         if (meta?.hide || userReplacements.has(userEntry.key)) {
             user.delete(userEntry.key)
-            return
+            continue
         }
 
         if (meta?.displayName) {
@@ -421,19 +426,19 @@ function fixUser() {
         if (userEntry.displayName.endsWith(' [X]')) {
             userEntry.displayName = userEntry.displayName.slice(0, -4)
         }
-    })
+    }
 }
 
-async function main() {
+function main() {
     const files = getJsonFilesOfDirectory()
 
     for (const dirent of files) {
         process.stdout.write(`\r${dirent.name}`)
         const content = readJsonFile<DataRaw.File>(dirent.name)
-        content.issues.forEach((issue) => {
+        for (const issue of content.issues) {
             process.stdout.write(`\r${issue.key}`)
             processIssue(issue)
-        })
+        }
         process.stdout.write(`\r${dirent.name} done`)
     }
     process.stdout.write('\n')

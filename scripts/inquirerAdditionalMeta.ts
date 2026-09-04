@@ -1,44 +1,45 @@
 import fs from 'node:fs'
+
 import {checkbox, confirm, expand, input, select} from '@inquirer/prompts'
-import type {DataAdditional} from '../types/data-additional.ts'
+
 import type {Data} from '../types/data.ts'
+import type {DataAdditional} from '../types/data-additional.ts'
+import type {DataRaw} from '../types/data-raw.d.ts'
 import {additionalDataDir, dataDir, readMap, writeMap} from './util.ts'
 
-const userDefinedPredictions = readMap<string[]>('predictionMeta.json', additionalDataDir)
+const userDefinedPredictions = readMap<string, string[]>('predictionMeta.json', additionalDataDir)
 
-const issues = readMap<Data.Issue>('issues.json', dataDir)
-const users = readMap<Data.User>('users.json', dataDir)
-const issueTypes = readMap<Data.IssueType>('types.json', dataDir)
-const issueLinks = readMap<Data.IssueLink>('links.json', dataDir)
-const issueLinkTypes = readMap<Data.IssueLinkType>('issueLinkTypes.json', dataDir)
-const statuses = readMap<Data.Status>('statuses.json', dataDir)
-const components = readMap<Data.Component>('components.json', dataDir)
-const sprints = readMap<Data.Sprint>('sprints.json', dataDir)
+const issues = readMap<string, Data.Issue>('issues.json', dataDir)
+const users = readMap<string, Data.User>('users.json', dataDir)
+const issueTypes = readMap<string, Data.IssueType>('types.json', dataDir)
+const issueLinks = readMap<string, Data.IssueLink>('links.json', dataDir)
+const issueLinkTypes = readMap<string, Data.IssueLinkType>('issueLinkTypes.json', dataDir)
+const statuses = readMap<string, Data.Status>('statuses.json', dataDir)
+const components = readMap<string, Data.Component>('components.json', dataDir)
+const sprints = readMap<string, Data.Sprint>('sprints.json', dataDir)
 
 // normalize
-for (const [keyword, areas] of [...userDefinedPredictions.entries()]) {
+for (const [keyword, areas] of userDefinedPredictions.entries()) {
     userDefinedPredictions.delete(keyword)
     userDefinedPredictions.set(normalized(keyword), unique(areas))
 }
 
-const newStates = statuses.values()
+const newStates = new Set(statuses.values()
     .filter((state) => state.statusCategory.key === 'new')
-    .map<string>((state) => state.id)
-    .toArray()
-const closedStates = statuses.values()
+    .map<string>((state) => state.id))
+const closedStates = new Set(statuses.values()
     .filter((state) => state.statusCategory.key === 'done')
-    .map<string>((state) => state.id)
-    .toArray()
+    .map<string>((state) => state.id))
 
 const componentLookup = new Map(components.entries().map(([id, component]) => [normalized(component.name), id]))
 
 let editedIssues = 0
 const skippedDuplicateIssues = new Set<string>()
 
-const userAddedInformation = readMap<DataAdditional.IssueMeta>('issueMeta.json', additionalDataDir)
+const userAddedInformation = readMap<string, DataAdditional.IssueMeta>('issueMeta.json', additionalDataDir)
 const alreadyKnownAreas = new Map(userAddedInformation.values()
     .flatMap((metadata) => metadata.area ?? [])
-    .map((area) => [normalized(area), area])
+    .map((area) => [normalized(area), area]),
 )
 
 function unique(values: string[]): string[] {
@@ -50,7 +51,7 @@ function userName(key: string): string {
 }
 
 function clearScreen(): void {
-    process.stdout.write('\u001b[2J\u001b[H')
+    process.stdout.write('\u001B[2J\u001B[H')
 }
 
 function getLinkedIssues(issue: Data.Issue): Data.Issue[] {
@@ -61,11 +62,27 @@ function getLinkedIssues(issue: Data.Issue): Data.Issue[] {
 
     return unique(linkedIds)
         .map((id) => issues.get(id))
+        // eslint-disable-next-line unicorn/prefer-native-coercion-functions
         .filter((linkedIssue): linkedIssue is Data.Issue => Boolean(linkedIssue))
 }
 
 function normalized(value: string): string {
     return value.trim().toLocaleLowerCase()
+}
+
+function addAreaPredictions(allSummariesString: string, areaPredictions: Set<string>): void {
+    for (const [keyword, predictedAreas] of userDefinedPredictions.entries()) {
+        if (allSummariesString.includes(keyword)) {
+            for (const predictedArea of predictedAreas) {
+                areaPredictions.add(predictedArea)
+            }
+        }
+    }
+    for (const [normalizedArea, readableArea] of alreadyKnownAreas.entries()) {
+        if (allSummariesString.includes(normalizedArea)) {
+            areaPredictions.add(readableArea)
+        }
+    }
 }
 
 function predictions(issue: Data.Issue, current: DataAdditional.IssueMeta) {
@@ -77,34 +94,26 @@ function predictions(issue: Data.Issue, current: DataAdditional.IssueMeta) {
         ...linkedIssues.map((linkedIssue) => normalized(linkedIssue.summary)),
     ].join(' | ')
 
-    linkedIssues.forEach((linkedIssue) => {
-        linkedIssue.components.forEach((componentId) => {
+    for (const linkedIssue of linkedIssues) {
+        for (const componentId of linkedIssue.components) {
             componentPredictions.add(componentId)
-        })
+        }
 
         const metadata = userAddedInformation.get(linkedIssue.id)
-        metadata?.area?.forEach((area) => {
-            areaPredictions.add(area)
-        })
-    })
+        if (metadata?.area) {
+            for (const area of metadata.area) {
+                areaPredictions.add(area)
+            }
+        }
+    }
 
-    componentLookup.entries().forEach(([name, id]) => {
+    for (const [name, id] of componentLookup.entries()) {
         if (allSummariesString.includes(name)) {
             componentPredictions.add(id)
         }
-    })
-    userDefinedPredictions.entries().forEach(([keyword, predictedAreas]) => {
-        if (allSummariesString.includes(keyword)) {
-            for (const predictedArea of predictedAreas) {
-                areaPredictions.add(predictedArea)
-            }
-        }
-    })
-    alreadyKnownAreas.entries().forEach(([normalizedArea, readableArea]) => {
-        if (allSummariesString.includes(normalizedArea)) {
-            areaPredictions.add(readableArea)
-        }
-    })
+    }
+
+    addAreaPredictions(allSummariesString, areaPredictions)
 
     const predictedComponents = [...componentPredictions.values()]
         .filter((componentId) => !current.components?.includes(componentId))
@@ -120,11 +129,15 @@ function predictions(issue: Data.Issue, current: DataAdditional.IssueMeta) {
 }
 
 function wasIssueDirectlyClosed(issue: Data.Issue): boolean {
-    return closedStates.includes(issue.status) && !!issue.changelog.filter((change) => {
-        return change.items.some((item) => {
-            return item.field === 'status' && newStates.includes(item.from) && closedStates.includes(item.to)
+    return closedStates.has(issue.status) && !!issue.changelog.filter((change) => {
+        return (change.items as DataRaw.IssueChangelogHistoryItem[]).some((item) => {
+            return item.field === 'status'
+                // @ts-expect-error the set will only contain strings
+                && newStates.has(item.from)
+                // @ts-expect-error the set will only contain strings
+                && closedStates.has(item.to)
         })
-    })?.length
+    }).length
 }
 
 function printIssue(issue: Data.Issue, linked: Data.Issue[], alreadyEdited: boolean): void {
@@ -133,7 +146,8 @@ function printIssue(issue: Data.Issue, linked: Data.Issue[], alreadyEdited: bool
     const componentNames = issue.components
         .map((componentId) => components.get(componentId)?.name ?? componentId)
     const sprintNames = issue.sprints
-        ?.map((sprintId) => sprints.get(sprintId)?.name ?? sprintId)
+        ?.map((sprintId) => sprints.get(sprintId.toString())?.name ?? sprintId)
+    // eslint-disable-next-line sonarjs/function-return-type
     const linkedSummaries = issue.issuelinks.flatMap((linkId) => {
         const link = issueLinks.get(linkId)
         const linkedIssue = linked.find((candidate) =>
@@ -141,36 +155,46 @@ function printIssue(issue: Data.Issue, linked: Data.Issue[], alreadyEdited: bool
         if (!linkedIssue) {
             return []
         }
-        const linkType = link?.type ? issueLinkTypes.get(link.type)?.name ?? link.type : 'link'
+        const linkType = link?.type
+            ? issueLinkTypes.get(link.type)?.name ?? link.type
+            : 'link'
         return `${linkedIssue.key} (${linkType}): ${linkedIssue.summary}`
     })
 
     const directlyClosed = wasIssueDirectlyClosed(issue)
 
     console.log(`\n == Ticket ${editedIssues} of ${issues.size} ` + '='.repeat(45))
-    console.log(`\n${issue.key} | ${type} | ${status}${alreadyEdited ? ' | [already edited]' : ''}`)
+    console.log(`\n${issue.key} | ${type} | ${status}${alreadyEdited
+        ? ' | [already edited]'
+        : ''}`)
     console.log('\n' + issue.summary)
-    console.log(`\n${issue.description || '(none)'}`)
+    console.log(`\n${issue.description ?? '(none)'}`)
     console.log(`\nReporter: ${userName(issue.reporter) || '(unknown)'}`)
     console.log(`Assignee(s): ${issue.assignedUsersUnique.map(userName).join(', ') || '(none)'}`)
     console.log(`Mentioned user(s): ${issue.mentionedUsersUnique.map(userName).join(', ') || '(none)'}`)
     console.log(`Components: ${componentNames.join(', ') || '(none)'}`)
-    console.log(`Sprint(s): ${sprintNames?.join(', ') || '(none)'}`)
+    console.log(`Sprint(s): ${sprintNames?.join(', ') ?? '(none)'}`)
     console.log(`Linked issue(s): ${linkedSummaries.join(' | ') || '(none)'}`)
-    console.log(`\nDirectly closed: ${directlyClosed ? '--> yes!' : 'no'}\n`)
+    console.log(`\nDirectly closed: ${directlyClosed
+        ? '--> yes!'
+        : 'no'}\n`)
 }
 
 function getComponentChoices(currentComponents: string[], predictedComponents: string[]) {
     return [...components.values()]
         .sort((componentA, componentB) => {
+            // eslint-disable-next-line unicorn/consistent-function-scoping
             const priority = (componentId: string) =>
                 Number(currentComponents.includes(componentId)) * 2
                 + Number(predictedComponents.includes(componentId))
             const priorityOrder = priority(componentB.id) - priority(componentA.id)
+
             return priorityOrder || componentA.name.localeCompare(componentB.name)
         })
         .map((component) => ({
-            name: `${component.name}${predictedComponents.includes(component.id) ? ' [predicted]' : ''}`,
+            name: `${component.name}${predictedComponents.includes(component.id)
+                ? ' [predicted]'
+                : ''}`,
             value: component.id,
             checked: currentComponents.includes(component.id) || predictedComponents.includes(component.id),
         }))
@@ -182,15 +206,18 @@ function getAreaChoices(currentArea: string[], predictedAreas: string[]) {
         ...currentArea,
         ...predictedAreas,
     ]).sort((areaA, areaB) => {
+        // eslint-disable-next-line unicorn/consistent-function-scoping
         const priority = (area: string) =>
-            Number(currentArea?.includes(area)) * 2
+            Number(currentArea.includes(area)) * 2
             + Number(predictedAreas.includes(area))
         const priorityOrder = priority(areaB) - priority(areaA)
         return priorityOrder || areaA.localeCompare(areaB)
     }).map((area) => ({
-        name: `${area}${predictedAreas.includes(area) ? ' [predicted]' : ''}`,
+        name: `${area}${predictedAreas.includes(area)
+            ? ' [predicted]'
+            : ''}`,
         value: area,
-        checked: currentArea?.includes(area) || predictedAreas.includes(area),
+        checked: currentArea.includes(area) || predictedAreas.includes(area),
     }))
 }
 
@@ -205,9 +232,10 @@ async function collectMetadata(issue: Data.Issue): Promise<DataAdditional.IssueM
         expanded: true,
         default: 'e',
         choices: [
+            // @ts-expect-error didn't get why ts shows an error here
             {key: 'h', name: 'Hide ticket', value: 'hide'},
             {key: 's', name: 'Skip ticket', value: 'skip'},
-            {key: 'u', name: 'Skip to next unedited ticket', value: 'unedited'},
+            {key: 'u', name: 'Skip to the next unedited ticket', value: 'unedited'},
             {key: 'e', name: 'Edit metadata (default)', value: 'edit'},
         ],
     })
@@ -259,7 +287,8 @@ async function collectMetadata(issue: Data.Issue): Promise<DataAdditional.IssueM
     }
 }
 
-async function detectDuplicates(issue: Data.Issue): Promise<boolean | void> {
+// eslint-disable-next-line sonarjs/cognitive-complexity
+async function detectDuplicates(issue: Data.Issue): Promise<boolean | undefined> {
     if (skippedDuplicateIssues.has(issue.id)) {
         return
     }
@@ -270,7 +299,7 @@ async function detectDuplicates(issue: Data.Issue): Promise<boolean | void> {
         return
     }
     if (existingMetadata?.duplicatedBy) {
-        existingMetadata.duplicatedBy.forEach((duplicateId) => issues.delete(duplicateId))
+        for (const duplicateId of existingMetadata.duplicatedBy) issues.delete(duplicateId)
         return
     }
 
@@ -294,10 +323,10 @@ async function detectDuplicates(issue: Data.Issue): Promise<boolean | void> {
         }
         duplicateIssues.set(currentId, currentIssue)
 
-        currentIssue.issuelinks.forEach((linkId) => {
+        for (const linkId of currentIssue.issuelinks) {
             const link = issueLinks.get(linkId)
-            if (link?.type !== duplicateLinkType.id) {
-                return
+            if (!link || link.type !== duplicateLinkType.id) {
+                continue
             }
 
             const linkedId = link.inwardIssue?.id === currentId
@@ -306,7 +335,7 @@ async function detectDuplicates(issue: Data.Issue): Promise<boolean | void> {
             if (linkedId) {
                 pendingIds.push(linkedId)
             }
-        })
+        }
     }
 
     if (duplicateIssues.size < 2) {
@@ -316,16 +345,16 @@ async function detectDuplicates(issue: Data.Issue): Promise<boolean | void> {
     const duplicateGroup = [...duplicateIssues.values()]
     clearScreen()
     console.log('\nPotential duplicate group:')
-    duplicateGroup.forEach((candidate) => {
+    for (const candidate of duplicateGroup) {
         console.log(`${candidate.key}: ${candidate.summary}`)
-    })
+    }
 
     const shouldDeduplicate = await confirm({
         message: 'Deduplicate this group?',
         default: true,
     })
     if (!shouldDeduplicate) {
-        duplicateGroup.forEach((candidate) => skippedDuplicateIssues.add(candidate.id))
+        for (const candidate of duplicateGroup) skippedDuplicateIssues.add(candidate.id)
         return
     }
 
@@ -351,14 +380,14 @@ async function detectDuplicates(issue: Data.Issue): Promise<boolean | void> {
     }
     userAddedInformation.set(mainIssueId, mergedMetadata)
 
-    duplicateIds.forEach((duplicateId) => {
+    for (const duplicateId of duplicateIds) {
         userAddedInformation.set(duplicateId, {
             ...userAddedInformation.get(duplicateId),
             hide: true,
             duplicateOf: mainIssueId,
         })
         // issues.delete(duplicateId)
-    })
+    }
 
     return true
 }
@@ -373,7 +402,8 @@ async function main(): Promise<void> {
             writeMap(userAddedInformation, 'issueMeta', additionalDataDir)
         }
     }
-    console.log(`\n${originalIssueCount - issues.size} issues removed as duplicates.`)
+    const removedCount = originalIssueCount - issues.size
+    console.log(`\n${removedCount} issues removed as duplicates.`)
 
     let skipEdited = false
     for (const issue of issues.values()) {
