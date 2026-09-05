@@ -9,6 +9,8 @@ At the moment it's a very messy code-base. It's on purpose to explore how to gre
 [Cytoscape.js](js.cytoscape.org) and the given data. Once the state of the project is more stable, the code will be 
 cleaned up and refactored. For now it's more like a proof of concept, a playground and move-fast-and-break-things.
 
+In that regard a lot of dead code is present. This is intentional at the moment.
+
 ## Structure
 
 ### `./scripts/`

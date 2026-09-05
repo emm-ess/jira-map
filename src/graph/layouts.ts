@@ -231,7 +231,7 @@ const cose = {
     minTemp: 1,
 } as const satisfies CoseLayoutOptions
 
-const fcose = {
+export const fcose = {
     name: 'fcose',
 
     // 'draft', 'default' or 'proof'
@@ -255,7 +255,7 @@ const fcose = {
     // Whether to include labels in node dimensions. Valid in "proof" quality
     nodeDimensionsIncludeLabels: false,
     // Whether or not simple nodes (non-compound nodes) are of uniform dimensions
-    uniformNodeDimensions: false,
+    uniformNodeDimensions: true,
     // Whether to pack disconnected components - cytoscape-layout-utilities extension should be registered and initialized
     packComponents: true,
     // Layout step - all, transformed, enforced, cose - for debug purpose only
@@ -417,7 +417,7 @@ const dagre = {
     },
 } as const satisfies LayoutOptions
 
-const elk = {
+export const elk = {
     name: 'elk',
     nodeDimensionsIncludeLabels: false, // Boolean which changes whether label dimensions are included when calculating node dimensions
     fit: true, // Whether to fit

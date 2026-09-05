@@ -516,7 +516,7 @@ function createNetwork(): void {
 
     const intersections = calculateIntersectionsNew()
 
-    const intersectionNodes: IntersectionElement[] = []
+    const intersectionNodes: DataPrepared.IntersectionElement[] = []
     for (const [id, entry] of intersections.entries()) {
         const nodeId = `intersection-${id}`
         intersectionNodes.push({
@@ -528,7 +528,7 @@ function createNetwork(): void {
                 issues: entry.issues.values()
                     .map((issue) => issue.id)
                     .toArray(),
-                children: entry.nodes.values().map((node) => node.data.id).toArray(),
+                children: entry.nodes.values().map((node) => node.data.id!).toArray(),
             },
         })
         for (const node of entry.nodes.values()) {

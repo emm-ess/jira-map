@@ -7,6 +7,7 @@ import type {
 import type {FcoseLayoutOptions} from 'cytoscape-fcose'
 
 import {canonicalizeDirection, nearestDirection} from './layoutHelper.ts'
+import {elk, fcose} from './layouts.ts'
 
 /*
  * Schematic line-map layout
@@ -378,34 +379,9 @@ export function onLayoutStop(event: LayoutEventObject): void {
 }
 
 export const customFCose = {
-    name: 'fcose',
-
-    // 'draft', 'default' or 'proof'
-    // - "draft" only applies spectral layout
-    // - "default" improves the quality with incremental layout (fast cooling rate)
-    // - "proof" improves the quality with incremental layout (slow cooling rate)
+    ...fcose,
     quality: 'proof',
-    // Use random node positions at beginning of layout
-    // if this is set to false, then quality option must be "proof"
-    randomize: true,
-    // Whether or not to animate the layout
     animate: false,
-    // Duration of animation in ms, if enabled
-    animationDuration: 1000,
-    // Easing of animation, if enabled
-    animationEasing: undefined,
-    // Fit the viewport to the repositioned nodes
-    fit: true,
-    // Padding around layout
-    padding: 30,
-    // Whether to include labels in node dimensions. Valid in "proof" quality
-    nodeDimensionsIncludeLabels: false,
-    // Whether or not simple nodes (non-compound nodes) are of uniform dimensions
-    uniformNodeDimensions: true,
-    // Whether to pack disconnected components - cytoscape-layout-utilities extension should be registered and initialized
-    packComponents: true,
-    // Layout step - all, transformed, enforced, cose - for debug purpose only
-    step: 'all',
 
     /* spectral layout options */
 
@@ -461,39 +437,10 @@ export const customFCose = {
     gravityCompound: 10,
     // Initial cooling factor for incremental layout
     initialEnergyOnIncremental: 0.3,
-
-    /* constraint options */
-
-    // Fix desired nodes to predefined positions
-    // [{nodeId: 'n1', position: {x: 100, y: 200}}, {...}]
-    fixedNodeConstraint: undefined,
-    // Align desired nodes in vertical/horizontal direction
-    // {vertical: [['n1', 'n2'], [...]], horizontal: [['n2', 'n4'], [...]]}
-    alignmentConstraint: undefined,
-    // Place two nodes relatively in vertical/horizontal direction
-    // [{top: 'n1', bottom: 'n2', gap: 100}, {left: 'n3', right: 'n4', gap: 75}, {...}]
-    relativePlacementConstraint: undefined,
-
-    /* layout event callbacks */
-    ready: () => {}, // on layoutready
-    stop: () => {}, // onLayoutStop,
 } satisfies FcoseLayoutOptions
 
 export const customElk = {
-    name: 'elk',
-    nodeDimensionsIncludeLabels: false, // Boolean which changes whether label dimensions are included when calculating node dimensions
-    fit: true, // Whether to fit
-    padding: 20, // Padding on fit
-    animate: false, // Whether to transition the node positions
-    animateFilter: function(node: any, i: any) { return true }, // Whether to animate specific nodes when animation
-    // is on; non-animated nodes immediately go to their final positions
-    animationDuration: 500, // Duration of animation in ms if enabled
-    animationEasing: undefined, // Easing of animation if enabled
-    transform: function(node: any, pos: any) { return pos }, // A function that applies a transform to the final node
-    // position
-    ready: undefined, // Callback on layoutready
-    stop: undefined, // Callback on layoutstop
-    nodeLayoutOptions: undefined, // Per-node options function
+    ...elk,
     elk: {
         // All options are available at http://www.eclipse.org/elk/reference.html
         //
@@ -509,7 +456,4 @@ export const customElk = {
         algorithm: 'disco',
         'elk.direction': 'DOWN',
     },
-    // Edges with a non-nil value are skipped when geedy edge cycle
-    priority: function(edge: EdgeSingular) {},
-    // breaking is enabled
 } as const satisfies LayoutOptions

@@ -17,7 +17,11 @@
                 add intersection hack
             </button>
 
-            <map-data ref="mapDataRef" :cy />
+            <map-data
+                ref="mapDataRef"
+                :cy
+                @layout-update-needed="updateLayout"
+            />
             <map-imexports :cy />
         </form>
     </main>
