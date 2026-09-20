@@ -1,13 +1,11 @@
 import type {
-    Collection, EdgeSingular,
-    LayoutEventObject, LayoutOptions,
+    Collection,
+    LayoutEventObject,
     Position,
     SingularElementArgument,
 } from 'cytoscape'
-import type {FcoseLayoutOptions} from 'cytoscape-fcose'
 
 import {canonicalizeDirection, nearestDirection} from './layoutHelper.ts'
-import {elk, fcose} from './layouts.ts'
 
 /*
  * Schematic line-map layout
@@ -224,7 +222,8 @@ function rasterizeLine(line: LineGeometry, positions: Positions, output: Positio
     }
 }
 
-function applySchematicGeometry(elements: Collection): void {
+/** Returns whether any station actually moved. */
+export function applySchematicGeometry(elements: Collection): boolean {
     const positions = snapshotPositions(elements)
     const lines = buildLines(elements, positions)
     separateParallelLanes(lines)
@@ -234,6 +233,11 @@ function applySchematicGeometry(elements: Collection): void {
         rasterizeLine(line, positions, next)
     }
     applyPositions(elements, next)
+
+    return [...next].some(([id, position]) => {
+        const original = positions.get(id)
+        return original?.x !== position.x || original?.y !== position.y
+    })
 }
 
 // --- crossing resolution ----------------------------------------------------
@@ -377,83 +381,3 @@ export function onLayoutStop(event: LayoutEventObject): void {
     compactIntersections(elements)
     elements.cy().fit(elements, 30)
 }
-
-export const customFCose = {
-    ...fcose,
-    quality: 'proof',
-    animate: false,
-
-    /* spectral layout options */
-
-    // False for random, true for greedy sampling
-    samplingType: false,
-    // Sample size to construct distance matrix
-    sampleSize: 75,
-    // Separation amount between nodes
-    nodeSeparation: 75,
-    // Power iteration tolerance
-    piTol: 0.000_000_1,
-
-    /* incremental layout options */
-
-    // Node repulsion (non overlapping) multiplier
-    nodeRepulsion: (node) => 4500,
-    // Ideal edge (non nested) length
-    idealEdgeLength: (edge) => {
-        return edge.data('type') === 'layout-helper-force'
-            ? edge.data('force') * 20
-            : edge.data('distance') * 50 || 50
-    },
-    // Divisor to compute edge forces
-    edgeElasticity: (edge) => {
-        return edge.data('type') === 'layout-helper-force'
-            ? 0.15
-            : 0.85
-    },
-    // Nesting factor (multiplier) to compute ideal edge length for nested edges
-    nestingFactor: 0.1,
-    // Maximum number of iterations to perform - this is a suggested value and might be adjusted by the algorithm as required
-    numIter: 3500,
-    // For enabling tiling
-    tile: true,
-    // The comparison function to be used while sorting nodes during tiling operation.
-    // Takes the ids of 2 nodes that will be compared as a parameter and the default tiling operation is performed when this option is not set.
-    // It works similar to ``compareFunction`` parameter of ``Array.prototype.sort()``
-    // If node1 is less then node2 by some ordering criterion ``tilingCompareBy(nodeId1, nodeId2)`` must return a negative value
-    // If node1 is greater then node2 by some ordering criterion ``tilingCompareBy(nodeId1, nodeId2)`` must return a positive value
-    // If node1 is equal to node2 by some ordering criterion ``tilingCompareBy(nodeId1, nodeId2)`` must return 0
-    tilingCompareBy: undefined,
-    // Represents the amount of the vertical space to put between the zero degree members during the tiling operation(can also be a function)
-    tilingPaddingVertical: 10,
-    // Represents the amount of the horizontal space to put between the zero degree members during the tiling operation(can also be a function)
-    tilingPaddingHorizontal: 10,
-    // Gravity force (constant)
-    gravity: 0.25,
-    // Gravity range (constant)
-    gravityRange: 1.5,
-    // Gravity range (constant) for compounds
-    gravityRangeCompound: 1,
-    // Gravity force (constant) for compounds
-    gravityCompound: 10,
-    // Initial cooling factor for incremental layout
-    initialEnergyOnIncremental: 0.3,
-} satisfies FcoseLayoutOptions
-
-export const customElk = {
-    ...elk,
-    elk: {
-        // All options are available at http://www.eclipse.org/elk/reference.html
-        //
-        // 'org.eclipse.' can be dropped from the identifier. The subsequent identifier has to be used as property key in quotes.
-        // E.g. for 'org.eclipse.elk.direction' use:
-        // 'elk.direction'
-        //
-        // Enums use the name of the enum as string e.g. instead of Direction.DOWN use:
-        // 'elk.direction': 'DOWN'
-        //
-        // The main field to set is `algorithm`, which controls which particular layout algorithm is used.
-        // Example (downwards layered layout):
-        algorithm: 'disco',
-        'elk.direction': 'DOWN',
-    },
-} as const satisfies LayoutOptions

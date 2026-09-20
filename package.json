@@ -26,8 +26,8 @@
     "last 2 firefox versions"
   ],
   "dependencies": {
-    "@inquirer/prompts": "^8.7.1",
-    "cytoscape": "^3.34.2",
+    "@inquirer/prompts": "^8.7.2",
+    "cytoscape": "^3.34.3",
     "cytoscape-cola": "^2.5.1",
     "cytoscape-dagre": "^4.0.1",
     "cytoscape-elk": "^2.3.0",
@@ -35,26 +35,27 @@
     "cytoscape-fcose": "^2.2.0",
     "cytoscape-layout-utilities": "^1.1.1",
     "cytoscape-svg": "^0.4.0",
-    "vue": "^3.5.42"
+    "pinia": "^4.0.3",
+    "vue": "^3.5.43"
   },
   "devDependencies": {
-    "@commitlint/cli": "~21.2.2",
-    "@commitlint/config-conventional": "~21.2.2",
+    "@commitlint/cli": "~21.2.3",
+    "@commitlint/config-conventional": "~21.2.3",
     "@emm-ess-configs/eslint-config-vue": "^0.4.1",
     "@tsconfig/node24": "^24.0.5",
     "@types/cytoscape-euler": "^1.2.4",
     "@types/cytoscape-fcose": "^2.2.5",
     "@types/node": "^24.1.0",
-    "@vitejs/plugin-vue": "^6.0.8",
+    "@vitejs/plugin-vue": "^6.0.9",
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^9.39.5",
     "husky": "~9.1.7",
-    "lint-staged": "~17.5.0",
+    "lint-staged": "~17.5.1",
     "npm-run-all2": "~9.0.3",
-    "sass": "^1.104.0",
+    "sass": "^1.104.1",
     "sort-package-json": "^4.0.0",
     "typescript": "~6.0.3",
-    "vite": "^8.2.2",
+    "vite": "^8.3.0",
     "vite-plugin-vue-devtools": "^8.2.1",
     "vue-tsc": "^3.3.11"
   }

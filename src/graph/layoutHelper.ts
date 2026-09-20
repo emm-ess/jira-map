@@ -94,7 +94,7 @@ function sortNodesOnAxis(nodes: NodeCollection, axis: BaseAxis): NodeSingular[] 
     return sortNodeArraySimple(nodes.toArray(), axis)
 }
 
-type Constraints = {
+export type Constraints = {
     relativeConstrains: FcoseRelativePlacementConstraint[]
     alignmentConstraint: FcoseAlignmentConstraint
 }
@@ -204,7 +204,8 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
     })
 }
 
-export function moveStationsAccordingToRestrictions(cy: cytoscape.Core, restrictions: FcoseRelativePlacementConstraint[]): void {
+export function moveStationsAccordingToRestrictions(cy: cytoscape.Core, restrictions: FcoseRelativePlacementConstraint[]): boolean {
+    let moved = false
     for (const restriction of restrictions) {
         const {left, right, top, bottom, gap} = restriction
         const horizontal = !!(left && right)
@@ -214,11 +215,14 @@ export function moveStationsAccordingToRestrictions(cy: cytoscape.Core, restrict
         const prevPosition = {...prevNode.position()}
         if (horizontal) {
             prevPosition.x += gap ?? 0
+            moved ||= nextNode.position().x !== prevPosition.x
         }
         else {
             prevPosition.y += gap ?? 0
+            moved ||= nextNode.position().y !== prevPosition.y
         }
         nextNode.position(prevPosition)
     }
     cy.fit()
+    return moved
 }

@@ -22,14 +22,10 @@
 </template>
 
 <script lang="ts" setup>
-import type {Core} from 'cytoscape'
 import {useTemplateRef} from 'vue'
 
-import {saveBlob, saveText} from '@/misc.ts'
-
-const {cy} = defineProps<{
-    cy: Core
-}>()
+import {cy} from '../graph/cyWrapper.ts'
+import {saveBlob, saveText} from '../misc.ts'
 
 const fileInput = useTemplateRef('fileInput')
 

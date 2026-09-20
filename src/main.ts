@@ -1,24 +1,11 @@
 import './style.css'
 
-import cytoscape from 'cytoscape'
-import cola from 'cytoscape-cola'
-import dagre from 'cytoscape-dagre'
-import elk from 'cytoscape-elk'
-import euler from 'cytoscape-euler'
-import fcose from 'cytoscape-fcose'
-import layoutUtilities from 'cytoscape-layout-utilities'
-import svg from 'cytoscape-svg'
+import {createPinia} from 'pinia'
 import {createApp} from 'vue'
 
 import App from './App.vue'
 
-cytoscape.use(layoutUtilities)
-cytoscape.use(cola)
-cytoscape.use(dagre)
-cytoscape.use(elk)
-cytoscape.use(euler)
-cytoscape.use(fcose)
-cytoscape.use(svg)
-
+const pinia = createPinia()
 const app = createApp(App)
+app.use(pinia)
 app.mount('#app')

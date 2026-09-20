@@ -99,8 +99,8 @@
 </template>
 
 <script setup lang="ts">
-import type {Core, ElementDefinition, NodeSingular} from 'cytoscape'
-import {ref, watch} from 'vue'
+import type {ElementDefinition, NodeSingular} from 'cytoscape'
+import {onMounted, ref, watch} from 'vue'
 
 import {AVAILABLE_LINES, intersections, loadData, user} from '@/data.ts'
 
@@ -112,16 +112,11 @@ import {
     type NodeSelection,
 } from '../../scripts/const.ts'
 import type {Data} from '../../types/data'
+import {cy, useCyStore} from '../graph/cyWrapper.ts'
 import BaseCheckbox from './BaseCheckbox.vue'
 import FormFieldset from './FormFieldset.vue'
 
-const {cy} = defineProps<{
-    cy: Core
-}>()
-
-const emit = defineEmits<{
-    layoutUpdateNeeded: []
-}>()
+const cyStore = useCyStore()
 
 // const selectedLines = ref([AVAILABLE_LINES[8], AVAILABLE_LINES[13]])
 const selectedLines = ref(AVAILABLE_LINES.filter((line) => line.handPickedColor))
@@ -133,6 +128,10 @@ const sprintRange = ref(false)
 const startSprint = ref(1)
 const endSprint = ref(10)
 const sprintBounds = ref<[min: number, max: number]>([1, 10])
+
+onMounted(() => {
+    updateLines()
+})
 
 function isEdgePossible(edge: EdgeSelection): boolean {
     return edge.nodes.every((nodeType) => selectedNodes.value.some((selected) => selected.type === nodeType))
@@ -195,7 +194,7 @@ async function updateLines() {
     // cy.add(helperEdges)
     updateSprintBounds()
     updateUser()
-    emit('layoutUpdateNeeded')
+    await cyStore.runLayout()
 }
 
 function updateUser() {
@@ -258,7 +257,7 @@ async function updateNodes() {
         cy.nodes().filter((element) => !nodesToKeep.has(element.data().type)),
     )
     cy.add(data.flat())
-    emit('layoutUpdateNeeded')
+    await cyStore.runLayout()
 }
 
 async function updateEdges() {
@@ -266,12 +265,6 @@ async function updateEdges() {
     const edgesToKeep = new Set(selectedEdges.value.map((edgeType) => edgeType.type))
     cleanEdges(edgesToKeep)
     cy.add(data.flat())
-    emit('layoutUpdateNeeded')
+    await cyStore.runLayout()
 }
-
-defineExpose({
-    updateLines,
-    updateNodes,
-    updateEdges,
-})
 </script>
