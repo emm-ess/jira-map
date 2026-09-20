@@ -11,27 +11,23 @@ import {canonicalizeDirection, nearestDirection} from './layoutHelper.ts'
  * Schematic line-map layout
  * -------------------------
  *
- *   fcose → line rasterization → crossing shifts → intersection compaction → fit
+ *   fcose → line rasterization → fit
  *
  * Station nodes (`data.line`) are chained by segment edges (`data.type ===
  * 'segment'`, `data.area` = line id).  Intersection nodes are compound parents
- * whose children are transfer stations kept in a tight cluster.
+ * whose children are transfer stations; clustering them is handled separately
+ * by `getIntersectionRestrictions`/`moveStationsAccordingToRestrictions` in
+ * `layoutHelper.ts`, not by this file. Lines crossing in open space (no
+ * shared station) are left alone — that's normal on a real schematic map,
+ * not a defect to resolve.
  *
  * Directions are the eight compass vectors in DIRECTIONS.  A line's `lane` is
- * the snapped projection onto the perpendicular unit axis.
- *
- * Known limitations:
- * - Crossing repair shifts a whole line by one grid step (greedy, bounded).
- * - Intersection compaction uses sub-grid spacing and locally breaks grid align.
- * - segmentsCross ignores touching endpoints and collinear overlap.
+ * the snapped projection onto the perpendicular axis (raw, non-unit; see `basis`).
  */
 
 const GRID_SIZE = 120
-const INTERSECTION_SPACING = 10
-const CROSSING_PASSES = 3
 
 type Edge = ReturnType<Collection['edges']>[number]
-type Node = ReturnType<Collection['nodes']>[number]
 type Positions = Map<string, Position>
 
 type LineGeometry = {
@@ -70,11 +66,17 @@ function snap(value: number): number {
     return Math.round(value / GRID_SIZE) * GRID_SIZE
 }
 
-/** Orthonormal along/across axes for an 8-compass direction. */
+/**
+ * Raw (non-unit) along/across axes for an 8-compass direction. `along` is
+ * the direction itself; `across` is its 90° rotation. Components stay in
+ * {-1, 0, 1}, so scale(along|across, snap(...)) always lands on an exact
+ * multiple of GRID_SIZE on both x and y — one shared grid for every line,
+ * regardless of direction. Diagonal lines get √2×-longer gaps between
+ * stations/lanes than horizontal or vertical ones; that's expected for an
+ * octilinear schematic map, not a bug.
+ */
 function basis(direction: Position): {along: Position; across: Position} {
-    const length = Math.hypot(direction.x, direction.y) || 1
-    const along = {x: direction.x / length, y: direction.y / length}
-    return {along, across: {x: -along.y, y: along.x}}
+    return {along: direction, across: {x: -direction.y, y: direction.x}}
 }
 
 function getMedian(values: number[]): number {
@@ -200,9 +202,12 @@ function separateParallelLanes(lines: LineGeometry[]): void {
 }
 
 /**
- * Project stations onto direction + lane. Progress is snapped on the unit
- * along-axis so diagonals keep GRID_SIZE spacing (the old code multiplied by
- * non-unit diagonal vectors and stretched lines by √2 / 2×).
+ * Project stations onto direction + lane. `along`/`across` are raw compass
+ * vectors (see `basis`), so `scale(along, progress)` and the lane offset are
+ * each an exact multiple of GRID_SIZE — every station lands on the same grid
+ * regardless of which line placed it. Diagonal lines get √2×-longer
+ * Euclidean gaps between stations than horizontal/vertical ones; that's
+ * correct for a schematic map, not something to normalize away.
  */
 function rasterizeLine(line: LineGeometry, positions: Positions, output: Positions): void {
     const {along, across} = basis(line.direction)
@@ -240,135 +245,6 @@ export function applySchematicGeometry(elements: Collection): boolean {
     })
 }
 
-// --- crossing resolution ----------------------------------------------------
-
-function segmentsCross(a1: Position, a2: Position, b1: Position, b2: Position): boolean {
-    const orient = (p: Position, q: Position, r: Position) =>
-        (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
-    const o1 = orient(a1, a2, b1)
-    const o2 = orient(a1, a2, b2)
-    const o3 = orient(b1, b2, a1)
-    const o4 = orient(b1, b2, a2)
-    return o1 * o2 < 0 && o3 * o4 < 0
-}
-
-function edgesCross(first: Edge, second: Edge): boolean {
-    return segmentsCross(
-        first.source().position(),
-        first.target().position(),
-        second.source().position(),
-        second.target().position(),
-    )
-}
-
-function edgeParents(edge: Edge): string[] {
-    return [edge.source().data('parent'), edge.target().data('parent')].filter(Boolean) as string[]
-}
-
-function edgesShareIntersection(first: Edge, second: Edge): boolean {
-    const parents = new Set(edgeParents(first))
-    return edgeParents(second).some((parent) => parents.has(parent))
-}
-
-function perpendicularOffset(edge: Edge): Position {
-    const direction = canonicalizeDirection(
-        nearestDirection(edge.source().position(), edge.target().position()),
-    )
-    return scale(basis(direction).across, GRID_SIZE)
-}
-
-function moveLine(elements: Collection, lineId: string, offset: Position): void {
-    for (const node of elements.nodes().filter((node) => node.data('line') === lineId)) {
-        node.position(add(node.position(), offset))
-    }
-}
-
-function tryShiftCrossing(
-    elements: Collection,
-    first: Edge,
-    second: Edge,
-    shifted: Set<string>,
-): boolean {
-    const firstLine = first.data('line') as string
-    const secondLine = second.data('line') as string
-    if (firstLine === secondLine) {
-        return false
-    }
-
-    const lineToMove = shifted.has(secondLine)
-        ? firstLine
-        : secondLine
-    if (shifted.has(lineToMove)) {
-        return false
-    }
-    if (edgesShareIntersection(first, second) || !edgesCross(first, second)) {
-        return false
-    }
-
-    const edgeForOffset = lineToMove === secondLine
-        ? second
-        : first
-    moveLine(elements, lineToMove, perpendicularOffset(edgeForOffset))
-    shifted.add(lineToMove)
-    return true
-}
-
-function resolveLineCrossings(elements: Collection): void {
-    const edges = getSegmentEdges(elements)
-    const shifted = new Set<string>()
-
-    for (let pass = 0; pass < CROSSING_PASSES; pass++) {
-        let moved = false
-        for (let index = 0; index < edges.length; index++) {
-            const first = edges[index]
-            if (!first) {
-                continue
-            }
-            for (const second of edges.slice(index + 1)) {
-                if (tryShiftCrossing(elements, first, second, shifted)) {
-                    moved = true
-                }
-            }
-        }
-        if (!moved) {
-            break
-        }
-    }
-}
-
-// --- intersection compaction ------------------------------------------------
-
-function averagePosition(nodes: Node[]): Position {
-    const count = nodes.length || 1
-    return {
-        x: nodes.reduce((sum, node) => sum + node.position().x, 0) / count,
-        y: nodes.reduce((sum, node) => sum + node.position().y, 0) / count,
-    }
-}
-
-function compactIntersection(intersection: Node): void {
-    // Pack transfer stations around their centroid on a fixed axis so the
-    // cluster reads as one stop without chasing a fragile longest-pair direction.
-    const children = intersection.children().toArray()
-    if (children.length === 0) {
-        return
-    }
-    const center = averagePosition(children)
-    const mid = (children.length - 1) / 2
-    for (const [index, child] of children.entries()) {
-        child.position({
-            x: center.x + (index - mid) * INTERSECTION_SPACING,
-            y: center.y,
-        })
-    }
-}
-
-function compactIntersections(elements: Collection): void {
-    for (const intersection of elements.nodes('[type="intersection"]')) {
-        compactIntersection(intersection)
-    }
-}
-
 // --- pipeline ---------------------------------------------------------------
 
 export function onLayoutStop(event: LayoutEventObject): void {
@@ -377,7 +253,5 @@ export function onLayoutStop(event: LayoutEventObject): void {
         return
     }
     applySchematicGeometry(elements)
-    resolveLineCrossings(elements)
-    compactIntersections(elements)
     elements.cy().fit(elements, 30)
 }
