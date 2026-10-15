@@ -33,10 +33,24 @@ export function canonicalizeDirection(direction: Position): Position {
     return direction
 }
 
+/**
+ * Closest of the 8 compass vectors in DIRECTIONS to the from→to delta, by
+ * angle (cosine similarity, so axis-length differences between the 4
+ * straight and 4 diagonal vectors don't skew the comparison). Picking the
+ * closest match directly, rather than mapping the angle to an array index,
+ * avoids depending on DIRECTIONS being sorted in a particular angular order.
+ */
 export function nearestDirection(from: Position, to: Position): Position {
-    const angle = Math.atan2(to.y - from.y, to.x - from.x)
-    const index = Math.round(angle / (Math.PI / 4) + 8) % 8
-    return DIRECTIONS[index] ?? DIRECTIONS[0]
+    const delta = {x: to.x - from.x, y: to.y - from.y}
+    return DIRECTIONS.reduce((best, direction) => {
+        const length = Math.hypot(direction.x, direction.y)
+        const cos = (direction.x * delta.x + direction.y * delta.y) / length
+        const bestLength = Math.hypot(best.x, best.y)
+        const bestCos = (best.x * delta.x + best.y * delta.y) / bestLength
+        return cos > bestCos
+            ? direction
+            : best
+    })
 }
 
 function getMainAxisBetweenNodes(nodes: NodeCollection): BaseAxis {
@@ -95,13 +109,13 @@ function sortNodesOnAxis(nodes: NodeCollection, axis: BaseAxis): NodeSingular[] 
 }
 
 export type Constraints = {
-    relativeConstrains: FcoseRelativePlacementConstraint[]
+    relativePlacementConstraint: FcoseRelativePlacementConstraint[]
     alignmentConstraint: FcoseAlignmentConstraint
 }
 
 function generateNodeRestrictions(nodes: NodeSingular[], axis: BaseAxis): Constraints {
     const alignmentConstraint: string[] = []
-    const relativeConstrains: FcoseRelativePlacementConstraint[] = []
+    const relativePlacementConstraint: FcoseRelativePlacementConstraint[] = []
     const sorted = sortNodeArray(nodes, axis)
     let prevId = sorted[0].id()
     alignmentConstraint.push(prevId)
@@ -119,14 +133,14 @@ function generateNodeRestrictions(nodes: NodeSingular[], axis: BaseAxis): Constr
                 bottom: nextId,
                 gap: 10,
             }
-        relativeConstrains.push(restriction)
+        relativePlacementConstraint.push(restriction)
         prevId = nextId
     }
     const axisName = axis === BaseAxis.HORIZONTAL
         ? 'horizontal'
         : 'vertical'
     return {
-        relativeConstrains,
+        relativePlacementConstraint,
         alignmentConstraint: {
             [axisName]: alignmentConstraint.length > 1
                 ? alignmentConstraint
@@ -189,14 +203,14 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
         // restrictions.unshift(generateNodeRestrictions(mainStationCollection, getOtherAxis(mainAxis)))
     }
     return restrictions.reduce<Constraints>((acc, curr) => {
-        acc.relativeConstrains.push(...curr.relativeConstrains)
+        acc.relativePlacementConstraint.push(...curr.relativePlacementConstraint)
 
         for (const key in curr.alignmentConstraint) {
             acc.alignmentConstraint[key].push(curr.alignmentConstraint[key])
         }
         return acc
     }, {
-        relativeConstrains: [],
+        relativePlacementConstraint: [],
         alignmentConstraint: {
             horizontal: [],
             vertical: [],

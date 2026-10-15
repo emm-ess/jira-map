@@ -10,6 +10,9 @@
         >
             Layout
         </base-select>
+        <base-checkbox id="randomize" v-model="cyStore.randomStartPositions">
+            Randomize start positions
+        </base-checkbox>
         <button type="button" @click="cyStore.runLayout">
             Re-run layouting
         </button>
@@ -36,6 +39,9 @@
         <button type="button" @click="cyStore.raster">
             Raster nodes/lines (45°)
         </button>
+        <button type="button" @click="cyStore.clusterIntersections">
+            Cluster intersection stations
+        </button>
         <p v-if="cyStore.status">
             {{ cyStore.status }}
         </p>
@@ -45,6 +51,7 @@
 <script lang="ts" setup>
 import {addIntersectionHack, useCyStore} from '../graph/cyWrapper.ts'
 import {LAYOUTS} from '../graph/layouts.ts'
+import BaseCheckbox from './BaseCheckbox.vue'
 import BaseSelect from './BaseSelect.vue'
 import FormFieldset from './FormFieldset.vue'
 

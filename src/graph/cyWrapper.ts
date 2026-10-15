@@ -9,7 +9,7 @@ import svg from 'cytoscape-svg'
 import {defineStore} from 'pinia'
 import {computed, readonly, ref, shallowRef, watch} from 'vue'
 
-import {applySchematicGeometry} from '@/graph/customLayout.ts'
+import {applyIntersectionClustering, applySchematicGeometry} from '@/graph/customLayout.ts'
 import {
     type Constraints,
     getIntersectionRestrictions,
@@ -75,10 +75,12 @@ function removeEmptyIntersections() {
 
 export const useCyStore = defineStore('cyStore', () => {
     const updating = ref(false)
-    const restrictions = shallowRef<Constraints>()
     const status = ref('')
 
-    const stationsMovable = computed(() => !!restrictions.value?.relativeConstrains.length)
+    const randomStartPositions = ref(true)
+    const restrictions = shallowRef<Constraints>()
+
+    const stationsMovable = computed(() => !!restrictions.value?.relativePlacementConstraint.length)
     const restrictable = computed(() => {
         const alignmentConstraints = restrictions.value?.alignmentConstraint
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
@@ -95,6 +97,7 @@ export const useCyStore = defineStore('cyStore', () => {
         cy.layout({
             ...layout.value.layout,
             ...restrictions.value,
+            randomize: randomStartPositions.value,
         }).run()
         await layoutFinished
         status.value = 'Layout finished'
@@ -104,8 +107,8 @@ export const useCyStore = defineStore('cyStore', () => {
     function computeRestrictions() {
         updating.value = true
         restrictions.value = getIntersectionRestrictions(cy)
-        status.value = restrictions.value.relativeConstrains.length > 0
-            ? `Computed ${restrictions.value.relativeConstrains.length} restriction(s).`
+        status.value = restrictions.value.relativePlacementConstraint.length > 0
+            ? `Computed ${restrictions.value.relativePlacementConstraint.length} restriction(s).`
             : 'No intersections need restrictions.'
         updating.value = false
     }
@@ -121,7 +124,7 @@ export const useCyStore = defineStore('cyStore', () => {
             status.value = 'Compute restrictions first.'
             return
         }
-        const moved = moveStationsAccordingToRestrictions(cy, restrictions.value!.relativeConstrains)
+        const moved = moveStationsAccordingToRestrictions(cy, restrictions.value!.relativePlacementConstraint)
         status.value = moved
             ? 'Stations moved inside intersections.'
             : 'Nothing to move, stations already match the restrictions.'
@@ -140,9 +143,22 @@ export const useCyStore = defineStore('cyStore', () => {
         updating.value = false
     }
 
+    function clusterIntersections() {
+        updating.value = true
+        const changed = applyIntersectionClustering(cy.elements())
+        if (changed) {
+            cy.fit(cy.elements(), 30)
+        }
+        status.value = changed
+            ? 'Intersection stations clustered.'
+            : 'Already clustered, nothing changed.'
+        updating.value = false
+    }
+
     return {
         updating: readonly(updating),
         layout,
+        randomStartPositions,
         status: readonly(status),
         restrictable,
         stationsMovable,
@@ -152,5 +168,6 @@ export const useCyStore = defineStore('cyStore', () => {
         clearRestrictions,
         moveStations,
         raster,
+        clusterIntersections,
     }
 })
