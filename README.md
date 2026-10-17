@@ -32,3 +32,19 @@ Stack: Vue, TypeScript, Sass
 This is the heart of the application. It contains the logic for graph generation logic and layouting.
 
 Stack: [Cytoscape.js](js.cytoscape.org), TypeScript
+
+### `./test/`
+
+Unit tests for the layout code in `src/graph/`. Run them with `npm test` (once) or `npm run test:watch` (while
+developing); `npm run type-check` checks the app and the tests.
+
+- `test/graph/` mirrors `src/graph/`: one `<module>.test.ts` per module.
+- `test/fixtures/networks/` holds small hand-made networks as readable JSON (lines as lists of stations, interchanges
+  as lists of stations that are one stop). Each one is built for a specific problem, see its `description`.
+- `test/helpers/` builds a headless Cytoscape map from such a network the way `MapData.vue` does, and measures
+  results (crossings, how far stations moved, ...).
+
+The tests need none of the git-ignored data folders, so they run on a fresh clone. The pre-commit hook runs the tests
+that depend on the staged files.
+
+Stack: [Vitest](https://vitest.dev)

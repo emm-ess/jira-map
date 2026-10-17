@@ -1,0 +1,8 @@
+{
+    "description": "Two lines cross at one interchange: the smallest network that has one.",
+    "lines": {
+        "Red": ["r1", "r2", "r3", "r4", "r5"],
+        "Blue": ["b1", "b2", "b3", "b4", "b5"]
+    },
+    "interchanges": [["r3", "b3"]]
+}

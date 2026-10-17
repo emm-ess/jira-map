@@ -1,0 +1,10 @@
+{
+    "description": "Two networks that never meet: two lines cross in each, no line or interchange joins them.",
+    "lines": {
+        "Red": ["r1", "r2", "r3", "r4", "r5"],
+        "Blue": ["b1", "b2", "b3", "b4", "b5"],
+        "Green": ["g1", "g2", "g3", "g4", "g5"],
+        "Yellow": ["y1", "y2", "y3", "y4", "y5"]
+    },
+    "interchanges": [["r3", "b3"], ["g2", "y4"]]
+}

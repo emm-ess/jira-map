@@ -1,5 +1,5 @@
 import type {NodeCollection, NodeSingular, Position} from 'cytoscape'
-import type {FcoseAlignmentConstraint, FcoseFixedNodeConstraint, FcoseRelativePlacementConstraint} from 'cytoscape-fcose'
+import type {FcoseAlignmentConstraint, FcoseRelativePlacementConstraint} from 'cytoscape-fcose'
 
 const BOUNDING_BOX_OPTIONS = {
     includeNodes: true,
@@ -136,16 +136,14 @@ function generateNodeRestrictions(nodes: NodeSingular[], axis: BaseAxis): Constr
         relativePlacementConstraint.push(restriction)
         prevId = nextId
     }
-    const axisName = axis === BaseAxis.HORIZONTAL
-        ? 'horizontal'
-        : 'vertical'
+    const group = alignmentConstraint.length > 1
+        ? alignmentConstraint
+        : []
     return {
         relativePlacementConstraint,
-        alignmentConstraint: {
-            [axisName]: alignmentConstraint.length > 1
-                ? alignmentConstraint
-                : [],
-        },
+        alignmentConstraint: axis === BaseAxis.HORIZONTAL
+            ? {horizontal: [group]}
+            : {vertical: [group]},
     }
 }
 
@@ -158,7 +156,7 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
             continue
         }
 
-        const axisGroups = children.reduce((groups, child) => {
+        const axisGroups = children.reduce<Record<BaseAxis, NodeSingular[]>>((groups, child) => {
             const axis = getMainAxisOfClosedNeighborhood(child)
             groups[axis].push(child)
             return groups
@@ -205,8 +203,8 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
     return restrictions.reduce<Constraints>((acc, curr) => {
         acc.relativePlacementConstraint.push(...curr.relativePlacementConstraint)
 
-        for (const key in curr.alignmentConstraint) {
-            acc.alignmentConstraint[key].push(curr.alignmentConstraint[key])
+        for (const key of ['horizontal', 'vertical'] as const) {
+            acc.alignmentConstraint[key]?.push(...curr.alignmentConstraint[key] ?? [])
         }
         return acc
     }, {
@@ -218,13 +216,309 @@ export function getIntersectionRestrictions(cy: cytoscape.Core): Constraints {
     })
 }
 
+// --- merging restriction sets ------------------------------------------------
+
+type UnionFind = {
+    find: (id: string) => string
+    union: (a: string, b: string) => void
+}
+
+function createUnionFind(): UnionFind {
+    const parent = new Map<string, string>()
+    const find = (id: string): string => {
+        const next = parent.get(id)
+        if (next === undefined) {
+            return id
+        }
+        const root = find(next)
+        parent.set(id, root)
+        return root
+    }
+    return {
+        find,
+        union: (a, b) => {
+            const rootA = find(a)
+            const rootB = find(b)
+            if (rootA !== rootB) {
+                parent.set(rootA, rootB)
+            }
+        },
+    }
+}
+
+/** Whether aligning `ids` on one axis would put two nodes on the same point (they'd already share the other coordinate). */
+function wouldCoincide(ids: string[], same: UnionFind, other: UnionFind, known: Set<string>): boolean {
+    const roots = new Set(ids.map((id) => same.find(id)))
+    const members = new Set([...ids, ...[...known].filter((id) => roots.has(same.find(id)))])
+    const otherRoots = [...members].map((id) => other.find(id))
+    return new Set(otherRoots).size < otherRoots.length
+}
+
+/** Alignment groups of one axis; fcose wants overlapping groups merged ("most compact form"). */
+function alignmentGroups(classes: UnionFind, ids: Set<string>): string[][] {
+    const groups = new Map<string, string[]>()
+    for (const id of ids) {
+        const root = classes.find(id)
+        const group = groups.get(root)
+        if (group) {
+            group.push(id)
+        }
+        else {
+            groups.set(root, [id])
+        }
+    }
+    return [...groups.values()].filter((group) => group.length > 1)
+}
+
+function hasPath(graph: Map<string, string[]>, start: string, goal: string): boolean {
+    const seen = new Set<string>()
+    const stack = [start]
+    while (stack.length > 0) {
+        const node = stack.pop()
+        if (node === goal) {
+            return true
+        }
+        if (node !== undefined && !seen.has(node)) {
+            seen.add(node)
+            stack.push(...graph.get(node) ?? [])
+        }
+    }
+    return false
+}
+
+export type RestrictionOrder =
+    | 'as-computed'
+    | 'random'
+    | 'top-to-bottom'
+    | 'bottom-to-top'
+    | 'left-to-right'
+    | 'right-to-left'
+
+export const RESTRICTION_ORDERS: {name: string, value: RestrictionOrder}[] = [
+    {name: 'as computed', value: 'as-computed'},
+    {name: 'random', value: 'random'},
+    {name: 'top to bottom', value: 'top-to-bottom'},
+    {name: 'bottom to top', value: 'bottom-to-top'},
+    {name: 'left to right', value: 'left-to-right'},
+    {name: 'right to left', value: 'right-to-left'},
+]
+
+const ORDER_AXES = {
+    'top-to-bottom': ['y', 1],
+    'bottom-to-top': ['y', -1],
+    'left-to-right': ['x', 1],
+    'right-to-left': ['x', -1],
+} as const
+
+/** Mean of the known positions (`undefined` when there are none). */
+export function centroid(points: (Position | undefined)[]): Position | undefined {
+    const known = points.filter((point) => point !== undefined)
+    if (known.length === 0) {
+        return undefined
+    }
+    return {
+        x: known.reduce((sum, point) => sum + point.x, 0) / known.length,
+        y: known.reduce((sum, point) => sum + point.y, 0) / known.length,
+    }
+}
+
+/**
+ * Puts restrictions in the order they get resolved in — when two of them
+ * conflict, the earlier one wins. `anchorOf` says where a restriction sits
+ * (for the directional orders); items without a position count as 0.
+ */
+export function sortRestrictions<T>(
+    items: T[],
+    anchorOf: (item: T) => Position | undefined,
+    order: RestrictionOrder,
+    random: () => number = Math.random,
+): T[] {
+    if (order === 'as-computed') {
+        return items
+    }
+    if (order === 'random') {
+        return items
+            .map((item) => ({item, key: random()}))
+            .toSorted((a, b) => a.key - b.key)
+            .map(({item}) => item)
+    }
+    const [axis, direction] = ORDER_AXES[order]
+    return items.toSorted((a, b) => direction * ((anchorOf(a)?.[axis] ?? 0) - (anchorOf(b)?.[axis] ?? 0)))
+}
+
+type PlacementGraphs = {
+    x: Map<string, string[]>
+    y: Map<string, string[]>
+}
+
+/** Minimum distance between aligned stations that nothing else keeps apart. */
+const ALIGNED_GAP = 10
+
+/**
+ * Adds a placement unless it can't hold together with the ones already
+ * added: both nodes on the same coordinate (aligned), or a left/right
+ * (top/bottom) cycle between alignment classes. fcose misbehaves (it can
+ * throw) on such contradictions.
+ */
+function tryAddPlacement(
+    placement: FcoseRelativePlacementConstraint,
+    x: UnionFind,
+    y: UnionFind,
+    graphs: PlacementGraphs,
+): boolean {
+    const [classes, graph, first, second] = 'left' in placement
+        ? [x, graphs.x, placement.left, placement.right] as const
+        : [y, graphs.y, placement.top, placement.bottom] as const
+    const from = classes.find(first)
+    const to = classes.find(second)
+    if (from === to || hasPath(graph, to, from)) {
+        return false
+    }
+    graph.set(from, [...graph.get(from) ?? [], to])
+    return true
+}
+
+/**
+ * Every pair of aligned stations that no placement orders yet (directly or
+ * transitively) gets ordered by current position. Otherwise two groups
+ * joined by a merge (e.g. an intersection's stations and a line's stations)
+ * can end up on the very same point.
+ */
+function orderAlignedMembers(
+    groups: string[][],
+    horizontal: boolean,
+    x: UnionFind,
+    y: UnionFind,
+    graphs: PlacementGraphs,
+    positionOf: (id: string) => Position | undefined,
+): FcoseRelativePlacementConstraint[] {
+    const [classes, graph] = horizontal
+        ? [x, graphs.x] as const
+        : [y, graphs.y] as const
+    const axis = horizontal
+        ? 'x'
+        : 'y'
+    const coordinate = (id: string) => positionOf(id)?.[axis] ?? 0
+    const added: FcoseRelativePlacementConstraint[] = []
+    const order = (first: string, second: string) => {
+        const from = classes.find(first)
+        const to = classes.find(second)
+        if (hasPath(graph, from, to) || hasPath(graph, to, from)) {
+            return
+        }
+        const placement = horizontal
+            ? {left: first, right: second, gap: ALIGNED_GAP}
+            : {top: first, bottom: second, gap: ALIGNED_GAP}
+        if (tryAddPlacement(placement, x, y, graphs)) {
+            added.push(placement)
+        }
+    }
+    for (const group of groups) {
+        const ordered = group.toSorted((a, b) => coordinate(a) - coordinate(b))
+        // Neighbours first, so longer pairs are mostly implied already and skipped.
+        const pairs = ordered.flatMap((first, index) => {
+            return ordered.slice(index + 1).map((second, offset) => ({first, second, offset}))
+        })
+        for (const {first, second} of pairs.toSorted((a, b) => a.offset - b.offset)) {
+            order(first, second)
+        }
+    }
+    return added
+}
+
+/**
+ * Drops everything that names a node `isKnown` rejects, e.g. stations removed
+ * since the restrictions were computed. fcose never returns when it is given
+ * constraints for nodes that do not exist.
+ */
+function onlyKnownNodes(set: Constraints, isKnown: (id: string) => boolean): Constraints {
+    const knownGroups = (groups: string[][] | undefined) => groups?.map((group) => group.filter((id) => isKnown(id)))
+    return {
+        alignmentConstraint: {
+            horizontal: knownGroups(set.alignmentConstraint.horizontal),
+            vertical: knownGroups(set.alignmentConstraint.vertical),
+        },
+        relativePlacementConstraint: set.relativePlacementConstraint.filter((placement) => 'left' in placement
+            ? isKnown(placement.left) && isKnown(placement.right)
+            : isKnown(placement.top) && isKnown(placement.bottom)),
+    }
+}
+
+/**
+ * Combines restriction sets (earlier sets win conflicts) into one that fcose
+ * can take: overlapping alignment groups are merged, groups that would stack
+ * two stations on one point are skipped, placements that contradict the
+ * alignments or each other are dropped, and stations aligned on one axis are
+ * ordered along it (by `positionOf`, normally the current positions). Within
+ * each set, `order` decides which restriction wins a conflict. Nodes that
+ * `positionOf` doesn't know are dropped from every restriction.
+ */
+export function mergeConstraints(
+    allSets: Constraints[],
+    positionOf: (id: string) => Position | undefined,
+    order: RestrictionOrder = 'as-computed',
+): Constraints {
+    const sets = allSets.map((set) => onlyKnownNodes(set, (id) => positionOf(id) !== undefined))
+    const x = createUnionFind() // vertical alignment: same x
+    const y = createUnionFind() // horizontal alignment: same y
+    const known = new Set<string>()
+    const align = (group: string[], same: UnionFind, other: UnionFind) => {
+        const ids = [...new Set(group)]
+        const [first] = ids
+        if (first === undefined || ids.length < 2 || wouldCoincide(ids, same, other, known)) {
+            return
+        }
+        for (const id of ids) {
+            known.add(id)
+            same.union(first, id)
+        }
+    }
+    const groupAnchor = (group: string[]) => centroid(group.map((id) => positionOf(id)))
+    for (const set of sets) {
+        for (const group of sortRestrictions(set.alignmentConstraint.horizontal ?? [], groupAnchor, order)) {
+            align(group, y, x)
+        }
+        for (const group of sortRestrictions(set.alignmentConstraint.vertical ?? [], groupAnchor, order)) {
+            align(group, x, y)
+        }
+    }
+    const horizontal = alignmentGroups(y, known)
+    const vertical = alignmentGroups(x, known)
+
+    const graphs: PlacementGraphs = {x: new Map(), y: new Map()}
+    const placementAnchor = (placement: FcoseRelativePlacementConstraint) => {
+        const [first, second] = 'left' in placement
+            ? [placement.left, placement.right]
+            : [placement.top, placement.bottom]
+        return centroid([positionOf(first), positionOf(second)])
+    }
+    const kept = sets
+        .flatMap((set) => sortRestrictions(set.relativePlacementConstraint, placementAnchor, order))
+        .filter((placement) => tryAddPlacement(placement, x, y, graphs))
+    return {
+        alignmentConstraint: {horizontal, vertical},
+        relativePlacementConstraint: [
+            ...kept,
+            ...orderAlignedMembers(horizontal, true, x, y, graphs, positionOf),
+            ...orderAlignedMembers(vertical, false, x, y, graphs, positionOf),
+        ],
+    }
+}
+
 export function moveStationsAccordingToRestrictions(cy: cytoscape.Core, restrictions: FcoseRelativePlacementConstraint[]): boolean {
     let moved = false
     for (const restriction of restrictions) {
-        const {left, right, top, bottom, gap} = restriction
-        const horizontal = !!(left && right)
-        const prevNode = cy.getElementById(left ?? top)[0]
-        const nextNode = cy.getElementById(right ?? bottom)[0]
+        const {gap} = restriction
+        const horizontal = 'left' in restriction
+        const [previousId, nextId] = 'left' in restriction
+            ? [restriction.left, restriction.right]
+            : [restriction.top, restriction.bottom]
+        const prevNode = cy.getElementById(previousId)[0]
+        const nextNode = cy.getElementById(nextId)[0]
+        if (!prevNode || !nextNode) {
+            // a station that was removed since the restrictions were computed
+            continue
+        }
 
         const prevPosition = {...prevNode.position()}
         if (horizontal) {

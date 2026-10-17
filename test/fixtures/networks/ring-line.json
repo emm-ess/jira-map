@@ -1,0 +1,8 @@
+{
+    "description": "A line that starts and ends in the same interchange (a ring), crossed by a second line there.",
+    "lines": {
+        "Ring": ["a", "b", "c", "d", "e"],
+        "Cross": ["x1", "x2", "x3"]
+    },
+    "interchanges": [["a", "e", "x2"]]
+}

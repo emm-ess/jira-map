@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc && vite build",
+    "build": "npm run type-check && vite build",
     "data": "npm-run-all -s data:normalize data:evaluate data:prepare",
     "data:additional": "node scripts/inquirerAdditionalMeta.ts",
     "data:evaluate": "node scripts/evaluateData.ts",
@@ -16,7 +16,9 @@
     "lint:scripts": "eslint . --fix --cache",
     "prepare": "husky",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "vue-tsc --build tsconfig.web.json tsconfig.test.json"
   },
   "commitlint": {
     "extends": "@commitlint/config-conventional"
@@ -57,6 +59,7 @@
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
     "vite-plugin-vue-devtools": "^8.2.1",
+    "vitest": "^5.0.5",
     "vue-tsc": "^3.3.13"
   }
 }

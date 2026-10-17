@@ -2,10 +2,18 @@ import type {
     Collection,
     LayoutEventObject,
     Position,
-    SingularElementArgument,
 } from 'cytoscape'
+import type {FcoseAlignmentConstraint} from 'cytoscape-fcose'
 
-import {canonicalizeDirection, nearestDirection} from './layoutHelper.ts'
+import {
+    canonicalizeDirection,
+    centroid,
+    type Constraints,
+    mergeConstraints,
+    nearestDirection,
+    type RestrictionOrder,
+    sortRestrictions,
+} from './layoutHelper.ts'
 
 /*
  * Schematic line-map layout
@@ -14,7 +22,7 @@ import {canonicalizeDirection, nearestDirection} from './layoutHelper.ts'
  *   fcose → line straightening → fit
  *
  * Station nodes (`data.line`) are chained by segment edges (`data.type ===
- * 'segment'`, `data.area` = line id).  Intersection nodes are compound parents
+ * 'segment'`, `data.line` = line id).  Intersection nodes are compound parents
  * whose children are transfer stations — one per line passing through that
  * interchange. Lines crossing in open space (no shared station) are left
  * alone — that's normal on a real schematic map, not a defect to resolve.
@@ -34,18 +42,35 @@ import {canonicalizeDirection, nearestDirection} from './layoutHelper.ts'
  * that re-clusters each intersection's station children around their shared
  * centroid, grouped by approach direction. It reads whatever positions are
  * current at call time — no dependency on `applySchematicGeometry` having
- * just run. Separate from, and untouched by either of them:
+ * just run. The centre of an interchange is the centroid of its stations and
+ * the places are arranged so that their centroid is that centre too: a fixed
+ * point, running it again changes nothing. Stations that already stand on
+ * the places (in any order, e.g. after `applyLineUntangling`) are left where
+ * they are, so clustering never undoes the order chosen there. Separate
+ * from, and untouched by either of them:
  * `getIntersectionRestrictions`/`moveStationsAccordingToRestrictions` in
  * `layoutHelper.ts`, a coarser, bounding-box-based alternative kept as its
  * own tool.
+ *
+ * Which line gets which place at an interchange is a separate question
+ * (`applyLineUntangling`, untangle.ts).
+ *
+ * `getLineRestrictions`/`applyLineAlignment` are the between-intersections
+ * counterpart of the intersection restrictions in `layoutHelper.ts`: every
+ * horizontal or vertical stretch of a line, as it currently lies, becomes an
+ * alignment (plus ordering) restriction for the next fcose run, or can be
+ * snapped onto directly. Both restriction sets are combined with
+ * `mergeConstraints`, which resolves contradictions between them — the order
+ * restrictions are resolved in (`RestrictionOrder`) decides which of two
+ * conflicting ones survives.
  */
 
 const MIN_STATION_SPACING = 40
 
 type Edge = ReturnType<Collection['edges']>[number]
-type Positions = Map<string, Position>
+export type Positions = Map<string, Position>
 
-type Line = {
+export type Line = {
     id: string
     stationIds: string[]
 }
@@ -95,11 +120,11 @@ function getLayoutElements(event: LayoutEventObject): Collection | undefined {
     return (event.layout as LayoutWithElements).options?.eles
 }
 
-function snapshotPositions(elements: Collection): Positions {
+export function snapshotPositions(elements: Collection): Positions {
     return new Map(elements.nodes().map((node) => [node.id(), copy(node.position())]))
 }
 
-function applyPositions(elements: Collection, positions: Positions): void {
+export function applyPositions(elements: Collection, positions: Positions): void {
     for (const node of elements.nodes()) {
         const next = positions.get(node.id())
         if (next) {
@@ -108,8 +133,16 @@ function applyPositions(elements: Collection, positions: Positions): void {
     }
 }
 
-function getSegmentEdges(elements: Collection): SingularElementArgument[] {
-    return elements.edges().filter((edge) => edge.data('type') === 'segment').toArray()
+/** Entries of `after` whose coordinates differ from `before` (or are new). */
+export function changedPositions(before: Positions, after: Positions): Positions {
+    return new Map([...after].filter(([id, position]) => {
+        const original = before.get(id)
+        return original?.x !== position.x || original?.y !== position.y
+    }))
+}
+
+function getSegmentEdges(elements: Collection): Edge[] {
+    return elements.edges('[type="segment"]').toArray()
 }
 
 // --- line geometry ----------------------------------------------------------
@@ -138,7 +171,7 @@ function orderedStationIds(edges: Edge[]): string[] {
     return [first.source().id(), ...edges.map((edge) => edge.target().id())]
 }
 
-function buildLines(elements: Collection): Line[] {
+export function buildLines(elements: Collection): Line[] {
     const byLine = new Map<string, Edge[]>()
     for (const edge of getSegmentEdges(elements)) {
         const lineId = edge.data('line') as string
@@ -258,6 +291,8 @@ export function applySchematicGeometry(elements: Collection): boolean {
 // --- intersection clustering -------------------------------------------------
 
 const INTERSECTION_GAP = 10
+/** Closer than this (pixels) counts as the same place. */
+const SAME_PLACE = 1e-6
 /** Fallback approach axis for a station whose line has no edges to derive one from. */
 const DEFAULT_APPROACH_AXIS: Position = {x: 1, y: 0}
 
@@ -270,10 +305,21 @@ function directionKey(direction: Position): string {
 }
 
 /**
+ * Compass direction from one place to another; `undefined` if they are the
+ * same place. A rounding error between "the same" places must not pick a
+ * direction, or running the clustering twice would give two answers.
+ */
+function directionBetween(from: Position, to: Position): Position | undefined {
+    return distance(from, to) < SAME_PLACE
+        ? undefined
+        : nearestDirection(from, to)
+}
+
+/**
  * Direction a station's own line runs through it, from current positions:
  * the edge to the next station, or the edge from the previous one at a
  * line's end. `undefined` for a single-station line (nothing to derive a
- * direction from).
+ * direction from) or when the neighbours stand on the same place.
  */
 function stationApproachDirection(stationIds: string[], index: number, positions: Positions): Position | undefined {
     const current = stationIds[index]
@@ -288,19 +334,20 @@ function stationApproachDirection(stationIds: string[], index: number, positions
     const nextPosition = next
         ? positions.get(next)
         : undefined
-    if (nextPosition) {
-        return nearestDirection(currentPosition, nextPosition)
+    const towardsNext = nextPosition
+        ? directionBetween(currentPosition, nextPosition)
+        : undefined
+    if (towardsNext) {
+        return towardsNext
     }
 
     const previous = stationIds[index - 1]
     const previousPosition = previous
         ? positions.get(previous)
         : undefined
-    if (previousPosition) {
-        return nearestDirection(previousPosition, currentPosition)
-    }
-
-    return undefined
+    return previousPosition
+        ? directionBetween(previousPosition, currentPosition)
+        : undefined
 }
 
 /** Every station's approach direction, keyed by station id; omits stations with none. */
@@ -375,11 +422,29 @@ function placeAxisGroup(group: Segment, center: Position, gap: number, positions
     }
 }
 
-function averagePosition(positions: Position[]): Position {
-    if (positions.length === 0) {
-        return {x: 0, y: 0}
-    }
-    return scale(positions.reduce((total, position) => add(total, position), {x: 0, y: 0}), 1 / positions.length)
+/** Whether the stations stand on exactly these places, in any order (up to `tolerance`). */
+function standOnPlaces(current: Position[], places: Position[], tolerance = 1e-6): boolean {
+    const free = [...places]
+    return current.every((position) => {
+        const index = free.findIndex((place) => distance(position, place) <= tolerance)
+        return index !== -1 && free.splice(index, 1).length === 1
+    })
+}
+
+/** The stations of every interchange (at least two) that have a position, with their centre. */
+function knownInterchanges(elements: Collection, positions: Positions): {stations: {id: string, position: Position}[], center: Position}[] {
+    return elements.nodes('[type="intersection"]').toArray().flatMap((interchange) => {
+        const stations = interchange.children('[type="station"]').toArray().flatMap((child) => {
+            const position = positions.get(child.id())
+            return position
+                ? [{id: child.id(), position}]
+                : []
+        })
+        const center = centroid(stations.map((station) => station.position))
+        return center && stations.length >= 2
+            ? [{stations, center}]
+            : []
+    })
 }
 
 /**
@@ -388,35 +453,135 @@ function averagePosition(positions: Position[]): Position {
  * stop instead of wherever each independently-straightened line left its
  * own sibling. Only an intersection's own children move — the rest of each
  * line stays put, which can leave a small kink immediately outside it.
- * Returns whether any station actually moved.
+ *
+ * Approach directions are measured from the centre of an interchange, not
+ * from the place a station happens to stand on, and an interchange whose
+ * stations already stand on exactly the places computed here (in any order)
+ * is left alone. So running this again does not undo `applyLineUntangling`,
+ * which swaps stations between places. Returns whether any station moved.
  */
 export function applyIntersectionClustering(elements: Collection): boolean {
     const positions = snapshotPositions(elements)
-    const directions = computeApproachDirections(buildLines(elements), positions)
+    const interchanges = knownInterchanges(elements, positions)
+
+    const anchored = new Map(positions)
+    for (const {stations, center} of interchanges) {
+        for (const station of stations) {
+            anchored.set(station.id, center)
+        }
+    }
+    const directions = computeApproachDirections(buildLines(elements), anchored)
 
     const next = new Map<string, Position>()
-    for (const intersection of elements.nodes('[type="intersection"]')) {
-        const children = intersection.children('[type="station"]').map((child) => {
-            const id = child.id()
-            return {id, position: positions.get(id)}
-        })
-        const known = children.filter((child): child is {id: string; position: Position} => child.position !== undefined)
-        if (known.length < 2) {
-            continue
+    for (const {stations, center} of interchanges) {
+        const arranged: Positions = new Map()
+        for (const group of groupStationsByAxis(stations.map((station) => station.id), directions).values()) {
+            placeAxisGroup(group, {x: 0, y: 0}, INTERSECTION_GAP, positions, arranged)
         }
-
-        const center = averagePosition(known.map((child) => child.position))
-        const stationIds = known.map((child) => child.id)
-        for (const group of groupStationsByAxis(stationIds, directions).values()) {
-            placeAxisGroup(group, center, INTERSECTION_GAP, positions, next)
+        // Odd-sized groups are shifted by half a gap, so the arrangement is not centred on its
+        // origin. Move it so that its centroid is the interchange's current centroid: a fixed point,
+        // running this again finds the same centre and changes nothing.
+        const offset = centroid([...arranged.values()]) ?? {x: 0, y: 0}
+        const places: Positions = new Map([...arranged].map(([id, place]) => [id, add(place, {x: center.x - offset.x, y: center.y - offset.y})]))
+        if (!standOnPlaces(stations.map((station) => station.position), [...places.values()])) {
+            for (const [id, place] of places) {
+                next.set(id, place)
+            }
         }
     }
     applyPositions(elements, next)
 
-    return [...next].some(([id, position]) => {
-        const original = positions.get(id)
-        return original?.x !== position.x || original?.y !== position.y
+    return changedPositions(positions, next).size > 0
+}
+
+// --- line restrictions ---------------------------------------------------------
+
+/**
+ * Alignment + ordering restrictions for one straight segment. Only horizontal
+ * and vertical segments give any — fcose can't express diagonals, which are
+ * left to `applySchematicGeometry`. Ordering follows the segment's travel
+ * direction so the line can't fold back on itself.
+ */
+function segmentRestrictions({direction, stationIds}: Segment, gap: number): Constraints {
+    const horizontal = direction.y === 0
+    if (!horizontal && direction.x !== 0) {
+        return {alignmentConstraint: {}, relativePlacementConstraint: []}
+    }
+    const forward = horizontal
+        ? direction.x > 0
+        : direction.y > 0
+    const placements = stationIds.flatMap((first, index) => {
+        const second = stationIds[index + 1]
+        if (second === undefined) {
+            return []
+        }
+        const [before, after] = forward
+            ? [first, second]
+            : [second, first]
+        return [horizontal
+            ? {left: before, right: after, gap}
+            : {top: before, bottom: after, gap}]
     })
+    return {
+        alignmentConstraint: horizontal
+            ? {horizontal: [stationIds]}
+            : {vertical: [stationIds]},
+        relativePlacementConstraint: placements,
+    }
+}
+
+/**
+ * Restrictions that keep each straight horizontal/vertical stretch of a line
+ * (as it currently lies, measured from current positions) straight when
+ * fcose runs again. Combine with the intersection restrictions via
+ * `mergeConstraints`.
+ */
+export function getLineRestrictions(elements: Collection, order: RestrictionOrder = 'as-computed'): Constraints {
+    const positions = snapshotPositions(elements)
+    const segments = sortRestrictions(
+        buildLines(elements).flatMap((line) => buildSegments(line.stationIds, positions)),
+        (segment) => centroid(segment.stationIds.map((id) => positions.get(id))),
+        order,
+    )
+    return mergeConstraints(
+        segments.map((segment) => segmentRestrictions(segment, MIN_STATION_SPACING)),
+        (id) => positions.get(id),
+        order,
+    )
+}
+
+/** Moves every aligned group onto its mean coordinate (horizontal groups → y, vertical groups → x). */
+function alignPositions(positions: Positions, alignment: FcoseAlignmentConstraint): Positions {
+    const next = new Map(positions)
+    const alignGroups = (groups: string[][] | undefined, axis: 'x' | 'y') => {
+        for (const group of groups ?? []) {
+            const members = group.flatMap((id) => next.get(id) ?? [])
+            const mean = members.reduce((sum, member) => sum + member[axis], 0) / members.length
+            for (const id of group) {
+                const position = next.get(id)
+                // Tolerance keeps a repeated run a no-op despite float rounding in the mean.
+                if (position && Math.abs(position[axis] - mean) > 1e-6) {
+                    next.set(id, {...position, [axis]: mean})
+                }
+            }
+        }
+    }
+    alignGroups(alignment.horizontal, 'y')
+    alignGroups(alignment.vertical, 'x')
+    return next
+}
+
+/**
+ * Moves stations onto the alignments of the given line restrictions (no
+ * layout run). Can pull an intersection's stations apart again — cluster
+ * them afterwards. Returns whether any station actually moved.
+ */
+export function applyLineAlignment(elements: Collection, restrictions: Constraints): boolean {
+    const positions = snapshotPositions(elements)
+    // Only changed stations: writing an unchanged compound parent back would shift its children.
+    const moved = changedPositions(positions, alignPositions(positions, restrictions.alignmentConstraint))
+    applyPositions(elements, moved)
+    return moved.size > 0
 }
 
 // --- pipeline ---------------------------------------------------------------
@@ -427,5 +592,5 @@ export function onLayoutStop(event: LayoutEventObject): void {
         return
     }
     applySchematicGeometry(elements)
-    elements.cy().fit(elements, 30)
+    event.cy.fit(elements, 30)
 }

@@ -1,0 +1,8 @@
+{
+    "description": "Two lines run together between two interchanges, so they share one track. If they swap sides on the way they cross.",
+    "lines": {
+        "Red": ["r1", "rx", "ry", "r4"],
+        "Blue": ["b1", "bx", "by", "b4"]
+    },
+    "interchanges": [["rx", "bx"], ["ry", "by"]]
+}

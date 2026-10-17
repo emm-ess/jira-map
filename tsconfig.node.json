@@ -7,10 +7,12 @@
     ],
     "exclude": [
         "src/**/*.*",
+        "test/**/*",
     ],
     "compilerOptions": {
         "types": ["node"],
         "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
-        "allowImportingTsExtensions": true
+        "allowImportingTsExtensions": true,
+        "noEmit": true
     }
 }

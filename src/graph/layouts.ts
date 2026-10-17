@@ -1,13 +1,18 @@
 import type {
     BreadthFirstLayoutOptions,
     CircleLayoutOptions, ConcentricLayoutOptions, CoseLayoutOptions,
+    EdgeSingular,
     GridLayoutOptions, LayoutOptions,
     NodeSingular,
     PresetLayoutOptions,
     RandomLayoutOptions,
+    SingularElementArgument,
 } from 'cytoscape'
 import type {EulerLayoutOptions} from 'cytoscape-euler'
 import type {FcoseLayoutOptions} from 'cytoscape-fcose'
+
+/** Cytoscape's typings miss options of some layouts (and extensions bring their own): allow any extra option. */
+type WithExtras<T> = T & Record<string, unknown>
 
 const random = {
     name: 'random',
@@ -43,7 +48,7 @@ const preset = {
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-} as const satisfies PresetLayoutOptions
+} as const satisfies WithExtras<PresetLayoutOptions>
 
 const grid = {
     name: 'grid',
@@ -58,7 +63,7 @@ const grid = {
     condense: false, // uses all available space on false, uses minimal space on true
     rows: undefined, // force num of rows in the grid
     cols: undefined, // force num of columns in the grid
-    position: function(node) {}, // returns { row, col } for element
+    position: function(node: NodeSingular) {}, // returns { row, col } for element
     sort: undefined, // a sorting function to order the nodes; e.g. function(a, b){ return a.data('weight') - b.data('weight') }
     animate: false, // whether to transition the node positions
     animationDuration: 500, // duration of animation in ms if enabled
@@ -67,7 +72,7 @@ const grid = {
     ready: undefined, // callback on layoutready
     stop: undefined, // callback on layoutstop
     transform: function(node, position) { return position }, // transform a given node position. Useful for changing flow direction in discrete layouts
-} as const satisfies GridLayoutOptions
+} as const satisfies WithExtras<Omit<GridLayoutOptions, 'position'>>
 
 const circle = {
     name: 'circle',
@@ -360,7 +365,7 @@ const cola = {
     unconstrIter: undefined, // unconstrained initial layout iterations
     userConstIter: undefined, // initial layout iterations with user-specified constraints
     allConstIter: undefined, // initial layout iterations with all constraints including non-overlap
-} as const satisfies LayoutOptions
+} as const satisfies WithExtras<LayoutOptions>
 
 const dagre = {
     name: 'dagre',
@@ -373,8 +378,8 @@ const dagre = {
     acyclicer: undefined, // If set to 'greedy', uses a greedy heuristic for finding a feedback arc set for a graph.
     // A feedback arc set is a set of edges that can be removed to make a graph acyclic.
     ranker: undefined, // Type of algorithm to assign a rank to each node in the input graph. Possible values: 'network-simplex', 'tight-tree' or 'longest-path'
-    minLen: function(edge) { return 1 }, // number of ranks to keep between the source and target of the edge
-    edgeWeight: function(edge) { return 1 }, // higher weight edges are generally made shorter and straighter than lower weight edges
+    minLen: function(edge: EdgeSingular) { return 1 }, // number of ranks to keep between the source and target of the edge
+    edgeWeight: function(edge: EdgeSingular) { return 1 }, // higher weight edges are generally made shorter and straighter than lower weight edges
 
     // general layout options
     fit: true, // whether to fit to viewport
@@ -382,7 +387,7 @@ const dagre = {
     spacingFactor: undefined, // Applies a multiplicative factor (>0) to expand or compress the overall area that the nodes take up
     nodeDimensionsIncludeLabels: false, // whether labels should be included in determining the space used by a node
     animate: false, // whether to transition the node positions
-    animateFilter: function(node, i) { return true }, // whether to animate specific nodes when animation is on; non-animated nodes immediately go to their final positions
+    animateFilter: function(node: NodeSingular, i: number) { return true }, // whether to animate specific nodes when animation is on; non-animated nodes immediately go to their final positions
     animationDuration: 500, // duration of animation in ms if enabled
     animationEasing: undefined, // easing of animation if enabled
     boundingBox: undefined, // constrain layout bounds; { x1, y1, x2, y2 } or { x1, y1, w, h }
@@ -408,12 +413,12 @@ const dagre = {
      */
     dagreEdgeStyle: {
         'curve-style': 'unbundled-bezier',
-        'control-point-weights': (ele) => ele.scratch('controlPointWeights'),
-        'control-point-distances': (ele) => ele.scratch('controlPointDistances'),
+        'control-point-weights': (ele: SingularElementArgument) => ele.scratch('controlPointWeights'),
+        'control-point-distances': (ele: SingularElementArgument) => ele.scratch('controlPointDistances'),
         'edge-distances': 'intersection',
         'edge-ends-overlap': false,
     },
-} as const satisfies LayoutOptions
+} as const satisfies WithExtras<LayoutOptions>
 
 export const elk = {
     name: 'elk',
@@ -421,7 +426,7 @@ export const elk = {
     fit: true, // Whether to fit
     padding: 20, // Padding on fit
     animate: false, // Whether to transition the node positions
-    animateFilter: function(node, i) { return true }, // Whether to animate specific nodes when animation is on; non-animated nodes immediately go to their final positions
+    animateFilter: function(node: NodeSingular, i: number) { return true }, // Whether to animate specific nodes when animation is on; non-animated nodes immediately go to their final positions
     animationDuration: 500, // Duration of animation in ms if enabled
     animationEasing: undefined, // Easing of animation if enabled
     transform: function(node, pos) { return pos }, // A function that applies a transform to the final node position
@@ -444,9 +449,9 @@ export const elk = {
         'elk.direction': 'DOWN',
     },
     // Edges with a non-nil value are skipped when geedy edge cycle breaking
-    priority: function(edge) {},
+    priority: function(edge: EdgeSingular) {},
     // is enabled
-} as const satisfies LayoutOptions
+} as const satisfies WithExtras<LayoutOptions>
 
 const euler = {
     name: 'euler',
@@ -563,17 +568,9 @@ export const customFCose = {
     // Node repulsion (non overlapping) multiplier
     nodeRepulsion: (node) => 4500,
     // Ideal edge (non nested) length
-    idealEdgeLength: (edge) => {
-        return edge.data('type') === 'layout-helper-force'
-            ? edge.data('force') * 20
-            : edge.data('distance') * 50 || 50
-    },
+    idealEdgeLength: (edge) => edge.data('distance') * 50 || 50,
     // Divisor to compute edge forces
-    edgeElasticity: (edge) => {
-        return edge.data('type') === 'layout-helper-force'
-            ? 0.15
-            : 0.85
-    },
+    edgeElasticity: () => 0.85,
     // Nesting factor (multiplier) to compute ideal edge length for nested edges
     nestingFactor: 0.1,
     // Maximum number of iterations to perform - this is a suggested value and might be adjusted by the algorithm as required
@@ -620,7 +617,7 @@ export const customElk = {
         algorithm: 'disco',
         'elk.direction': 'DOWN',
     },
-} as const satisfies LayoutOptions
+} as const satisfies WithExtras<LayoutOptions>
 
 export const LAYOUTS = [
     {name: 'custom elk', layout: customElk},

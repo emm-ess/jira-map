@@ -79,6 +79,13 @@ export default [
         },
     },
     {
+        // Cytoscape's getElementById is not the DOM one
+        files: ['test/**/*.ts'],
+        rules: {
+            'unicorn/prefer-query-selector': 0,
+        },
+    },
+    {
         files: ['tsconfig.*.json'],
         rules: {
             'json/*': 0,

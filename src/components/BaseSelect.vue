@@ -1,11 +1,12 @@
 <template>
-    <label :for="id">
+    <label :for="id" :title>
         <slot />
     </label>
     <select
         :id="id"
         v-model="model"
         :name="id"
+        :title
     >
         <option
             v-for="item in items"
@@ -27,5 +28,6 @@ const model = defineModel<ItemType>()
 defineProps<{
     id: string
     items: ItemType[]
+    title?: string
 }>()
 </script>

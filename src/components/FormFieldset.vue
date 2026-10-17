@@ -1,6 +1,6 @@
 <template>
     <fieldset>
-        <details>
+        <details :open>
             <summary><slot name="summary" /></summary>
             <div class="scrollwrapper">
                 <slot />
@@ -8,6 +8,12 @@
         </details>
     </fieldset>
 </template>
+
+<script setup lang="ts">
+defineProps<{
+    open?: boolean
+}>()
+</script>
 
 <style scoped lang="sass">
 fieldset

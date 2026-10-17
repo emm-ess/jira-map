@@ -1,0 +1,15 @@
+{
+    "description": "Four lines, four interchanges, 26 stations: small enough to read, big enough that the order of lines at interchanges matters.",
+    "lines": {
+        "Red": ["r1", "r2", "rC1", "r3", "rC2", "r4", "r5"],
+        "Green": ["g1", "g2", "gC1", "g3", "gC3", "g4"],
+        "Blue": ["b1", "bC1", "b2", "b3", "bC4", "b4"],
+        "Yellow": ["y1", "yC2", "y2", "yC3", "y3", "yC4", "y4"]
+    },
+    "interchanges": [
+        ["rC1", "gC1", "bC1"],
+        ["rC2", "yC2"],
+        ["gC3", "yC3"],
+        ["bC4", "yC4"]
+    ]
+}

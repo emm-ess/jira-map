@@ -1,8 +1,8 @@
 module.exports = {
     // lint JS/TS-Code
     '*.(js?(x)|ts?(x)|mjs|cjs|vue|json|yml)': 'eslint --cache --fix',
-    // run tests
-    // '*.(js?(x)|ts?(x)|mjs|cjs|vue|json)': 'jest --passWithNoTests --findRelatedTests',
+    // run the tests that depend on the staged files
+    '*.(js?(x)|ts?(x)|mjs|cjs|vue|json)': 'vitest related --run --passWithNoTests',
     // check-types
     '(package-lock.json|*.ts?(x))': () => 'npm run type-check',
     // lint styles
